@@ -68,5 +68,19 @@
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1kknce7/4_square_supercharged_shuttle_wsymmetrical_hover/",
         "Discoverer": "Frosty-Abies-3317",
         "ImageUrl": "S_0xCFE998FC801E1E45.jpg"
+    },
+    {
+        "Name": "AN8 Riyamats",
+        "Type": "Explorer",
+        "Seed": "0xB7A03C267BC3B13C",
+        "Damage": 0.0,
+        "Shield": 39.74042892456055,
+        "Hyperdrive": 118.29220581054688,
+        "Manoeuvrability": 30.638607025146486,
+        "Galaxy": 1,
+        "Address": "115DF6FE5FF8",
+        "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1pt7rm0/explorer_ship_with_square_layout_sc/",
+        "Discoverer": "Jarl6969",
+        "ImageUrl": "S_0xB7A03C267BC3B13C.jpg"
     }
 ]
