@@ -1,0 +1,103 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a newer push replaces one still waiting.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # A hand-edited file with a trailing comma deploys happily and then shows an error on the
+      # page. The live site is case-sensitive where Windows is not, so an image named Ship.PNG
+      # in the data and saved as ship.png works locally and breaks once deployed. And a stat
+      # misspelt in maximums.json quietly stops its meter using the maximum.
+      - name: Every data file parses, every image exists, every maximum names a real stat
+        shell: python
+        run: |
+          import json, pathlib, sys
+
+          LOOKUPS = {'galaxies.json', 'maximums.json'}
+          failed = False
+          boards = {}
+          for path in sorted(pathlib.Path('data').glob('*.json')):
+              try:
+                  data = json.loads(path.read_text(encoding='utf-8'))
+              except ValueError as error:
+                  print(f'::error file={path}::{path} is not valid JSON: {error}')
+                  failed = True
+                  continue
+
+              if path.name in LOOKUPS:
+                  continue
+              if not isinstance(data, list):
+                  print(f'::error file={path}::{path} should be a list of entries')
+                  failed = True
+                  continue
+
+              boards[path.stem] = {key for entry in data if isinstance(entry, dict) for key in entry}
+              for entry in data:
+                  image = str((entry.get('ImageUrl') if isinstance(entry, dict) else '') or '').strip()
+                  if not image or image.startswith(('http://', 'https://')):
+                      continue
+                  name = image.replace(chr(92), '/').lstrip('/')  # chr(92) is a backslash
+                  name = name[4:] if name.lower().startswith('img/') else name
+                  if not (pathlib.Path('img') / name).is_file():
+                      print(f"::error file={path}::{entry.get('Name')}: img/{name} does not exist "
+                            f"(names are case-sensitive on the live site)")
+                      failed = True
+
+          try:
+              maximums = json.loads(pathlib.Path('data/maximums.json').read_text(encoding='utf-8'))
+          except (OSError, ValueError):
+              maximums = {}
+          for board, stats in maximums.items():
+              fields = boards.get(board)
+              if fields is None and pathlib.Path(f'data/{board}.json').exists():
+                  continue  # there, but broken, and already reported above
+              if fields is None:
+                  print(f'::error file=data/maximums.json::"{board}" has no data/{board}.json')
+                  failed = True
+                  continue
+              for stat in stats:
+                  if fields and stat not in fields:
+                      print(f'::error file=data/maximums.json::{board}: no entry has a field named "{stat}"')
+                      failed = True
+
+          sys.exit(1 if failed else 0)
+
+      # The site lives under /NMS-Tracker/, so a path starting with / points outside it: it
+      # works on localhost and 404s once deployed.
+      - name: Every path is relative
+        run: |
+          if grep -nE '(href|src)="/[^/]' *.html \
+             || grep -nE "data: *['\"]/" *.html \
+             || grep -nE "url\(['\"]?/[^/]" css/*.css; then
+            echo "::error::A path starts with / - make it relative, or it breaks under /NMS-Tracker/"
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

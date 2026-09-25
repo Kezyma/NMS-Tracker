@@ -1,0 +1,551 @@
+/*
+    NMS-Tracker.
+
+    Every page is the same board with a different config: load one JSON file, rank it by the
+    sum of its stats, and draw it as cards or as a table that sorts on any column. The config
+    names the fields that mean something - the stats that make up the total, the ones that get
+    a pick-list, the seeds - and any field it does not name is still shown, so adding one to the
+    JSON needs no change here.
+
+    Built from DOM nodes rather than HTML strings. The data is edited by hand, and a stray <
+    in a name should appear as a <, not turn into markup.
+*/
+(function () {
+    'use strict';
+
+    // Fields with a fixed place on a card. Anything else in the data is shown generically.
+    const PLACED = new Set(['Name', 'ImageUrl', 'Galaxy', 'Address', 'Source', 'Discoverer']);
+
+    const VIEW_KEY = 'nms-tracker:view';
+    const DOT = ' · ';
+
+    /* ------------------------------------------------------------------ helpers */
+
+    /** Element, attributes, children. Attributes named on* become listeners; null is skipped. */
+    function h(tag, attrs, ...kids) {
+        const el = document.createElement(tag);
+        for (const [name, value] of Object.entries(attrs || {})) {
+            if (value == null || value === false) continue;
+            if (name.startsWith('on')) el.addEventListener(name.slice(2), value);
+            else el.setAttribute(name, value === true ? '' : value);
+        }
+        for (const kid of kids.flat(Infinity)) {
+            if (kid != null && kid !== false && kid !== '') el.append(kid instanceof Node ? kid : String(kid));
+        }
+        return el;
+    }
+
+    /** FleetCoordination -> Fleet Coordination. */
+    const spaced = name => String(name).replace(/([a-z])([A-Z])/g, '$1 $2');
+
+    const number = value => (typeof value === 'number' ? value : Number.parseFloat(value));
+    const twoPlaces = value => (Number.isFinite(value) ? value.toFixed(2) : '—');
+    const blank = value => value == null || value === '' || Number.isNaN(value);
+
+    /** localStorage, when the browser allows it. A private window may not, and that is fine. */
+    function remembered(key, value) {
+        try {
+            if (value === undefined) return localStorage.getItem(key);
+            localStorage.setItem(key, value);
+        } catch {
+            // Not remembered; nothing else is lost.
+        }
+        return null;
+    }
+
+    async function load(path) {
+        // no-cache revalidates rather than refetching, so an edited file shows on the next
+        // visit instead of whenever the browser's own heuristics decide.
+        const response = await fetch(path, { cache: 'no-cache' });
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim());
+        return response.json();
+    }
+
+    /** An ImageUrl as a path into img/, or a full URL left alone. */
+    function imagePath(value) {
+        const text = String(value ?? '').trim();
+        if (!text) return null;
+        if (/^https?:\/\//i.test(text)) return text;
+
+        // Tolerate "img/x.png", "/x.png" and backslashes. A leading slash would otherwise
+        // escape the project path on GitHub Pages and quietly 404.
+        const file = text.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^img\//i, '');
+        return 'img/' + file.split('/').map(encodeURIComponent).join('/');
+    }
+
+    /** An image that becomes a placeholder, rather than a broken icon, if the file is missing. */
+    function picture(src, alt) {
+        const img = h('img', { src, alt, loading: 'lazy', decoding: 'async' });
+        img.addEventListener('error', () => {
+            img.closest('a')?.removeAttribute('href');
+            img.replaceWith(h('span', { class: 'none' }, 'Image missing'));
+        }, { once: true });
+        return img;
+    }
+
+    /** A URL as a short link named for its site; anything else as plain text. */
+    function link(value) {
+        const text = String(value ?? '').trim();
+        if (!/^https?:\/\//i.test(text)) return text;
+
+        let site = text;
+        try {
+            site = new URL(text).hostname.replace(/^www\./, '');
+        } catch {
+            // Shown in full.
+        }
+        return h('a', { href: text, target: '_blank', rel: 'noopener noreferrer', title: text }, site, ' ↗');
+    }
+
+    /** A field this file knows nothing about, shown without guessing at what it means. */
+    function plain(value) {
+        if (value == null) return '';
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(2);
+        if (typeof value === 'object') return JSON.stringify(value);
+        return link(value);
+    }
+
+    function unloadable(path, error) {
+        return h('div', { class: 'empty' },
+            h('b', {}, `Could not load ${path}.`),
+            location.protocol === 'file:'
+                ? 'Browsers will not let a page read files straight off the disk. Serve the folder '
+                  + 'instead (python -m http.server) and open http://localhost:8000.'
+                : String(error?.message ?? error));
+    }
+
+    /* ------------------------------------------------------------------ the board */
+
+    async function render(config) {
+        const root = document.getElementById('board');
+        const stats = config.stats || [];
+        const [one, many] = config.noun || ['entry', 'entries'];
+
+        let data;
+        let galaxies;
+        let maximums;
+        try {
+            [data, galaxies, maximums] = await Promise.all([
+                load(config.data),
+                // Both niceties: without names the numbers still work, and without maximums
+                // the meters are drawn against the best on the board.
+                load('data/galaxies.json').catch(() => ({})),
+                load('data/maximums.json').catch(() => ({})),
+            ]);
+            if (!Array.isArray(data)) throw new Error('Expected a list of entries.');
+        } catch (error) {
+            root.replaceChildren(unloadable(config.data, error));
+            return;
+        }
+
+        const entries = data.filter(entry => entry && typeof entry === 'object');
+        const galaxyName = n => (galaxies && galaxies[String(n)]) || '';
+        const galaxyLabel = n => (blank(n) ? '' : galaxyName(n) ? `${n}${DOT}${galaxyName(n)}` : String(n));
+
+        // Every field any entry has, in the order first seen. Configured fields nobody has yet
+        // are left out rather than drawn as empty columns.
+        const fields = [...new Set(entries.flatMap(entry => Object.keys(entry)))];
+        const present = name => fields.includes(name);
+        const facets = (config.facets || []).filter(present);
+        const seeds = (config.seeds || []).filter(present);
+        const tags = facets.filter(name => !PLACED.has(name));
+        const extras = fields.filter(name =>
+            !PLACED.has(name) && !stats.includes(name) && !facets.includes(name) && !seeds.includes(name));
+
+        const rows = entries.map((raw, index) => ({
+            raw,
+            index,
+            total: stats.length > 0
+                ? stats.reduce((sum, name) => sum + (Number.isFinite(number(raw[name])) ? number(raw[name]) : 0), 0)
+                : null,
+            rank: null,
+            text: [...fields.map(name => raw[name]), galaxyName(raw.Galaxy)]
+                .filter(value => typeof value === 'string')
+                .join('\n')
+                .toLowerCase(),
+        }));
+
+        // Competition ranking: equal totals share a place and the next place is skipped, so two
+        // ships tied for first are both #1 and the one after them is #3.
+        if (stats.length > 0) {
+            const order = [...rows].sort((a, b) => b.total - a.total);
+            order.forEach((row, i) => {
+                row.rank = i > 0 && row.total === order[i - 1].total ? order[i - 1].rank : i + 1;
+            });
+        }
+
+        // The highest of each stat. The meters are drawn against it, and when there is more
+        // than one entry to compare, whoever holds it is picked out.
+        const highest = {};
+        for (const name of stats) {
+            const values = rows.map(row => number(row.raw[name])).filter(Number.isFinite);
+            highest[name] = values.length > 0 ? Math.max(...values) : 0;
+        }
+        const leads = (name, value) => rows.length > 1 && Number.isFinite(value) && value === highest[name];
+
+        // The most each stat can be, from data/maximums.json under this board's file name -
+        // "starships" for data/starships.json. A stat with no maximum there is drawn against the
+        // best on the board instead, and its meter says which it is.
+        const board = config.data.split('/').pop().replace(/\.json$/i, '');
+        const ceiling = {};
+        for (const name of stats) {
+            const stated = number(maximums?.[board]?.[name]);
+            ceiling[name] = Number.isFinite(stated) && stated > 0
+                ? { most: stated, stated: true }
+                : { most: highest[name], stated: false };
+        }
+
+        /* -------------------------------------------------------------- columns */
+
+        const field = name => row => row.raw[name];
+        const columns = [
+            stats.length > 0 && { id: 'rank', label: '#', cls: 'pos', sortsAs: 'total', cell: row => row.rank },
+            { id: 'image', label: 'Image', hideLabel: true, cls: 'shot-cell', cell: thumb },
+            { id: 'Name', label: 'Name', cls: 'name', sort: field('Name'), cell: row => row.raw.Name },
+            ...tags.map(name => ({ id: name, label: spaced(name), sort: field(name), cell: row => plain(row.raw[name]) })),
+            ...stats.map(name => ({
+                id: name,
+                label: spaced(name),
+                numeric: true,
+                desc: true,
+                sort: row => number(row.raw[name]),
+                cell: row => twoPlaces(number(row.raw[name])),
+                cls: row => (leads(name, number(row.raw[name])) ? 'num best' : 'num'),
+            })),
+            stats.length > 0 && {
+                id: 'total', label: 'Total', numeric: true, desc: true, cls: 'num tot',
+                sort: row => row.total, cell: row => twoPlaces(row.total),
+            },
+            present('Galaxy') && {
+                id: 'Galaxy', label: 'Galaxy', numeric: true,
+                sort: row => number(row.raw.Galaxy), cell: row => galaxyLabel(row.raw.Galaxy),
+            },
+            present('Address') && {
+                id: 'Address', label: 'Address', cls: 'addr-cell',
+                sort: field('Address'), cell: row => address(row.raw, false),
+            },
+            present('Discoverer') && { id: 'Discoverer', label: 'Discoverer', sort: field('Discoverer'), cell: row => row.raw.Discoverer },
+            ...seeds.map(name => ({ id: name, label: spaced(name), cls: 'seed', sort: field(name), cell: row => row.raw[name] })),
+            ...extras.map(name => ({ id: name, label: spaced(name), cls: 'extra', sort: field(name), cell: row => plain(row.raw[name]) })),
+            present('Source') && { id: 'Source', label: 'Source', cell: row => link(row.raw.Source) },
+        ].filter(Boolean);
+
+        const byId = Object.fromEntries(columns.map(column => [column.id, column]));
+
+        /* -------------------------------------------------------------- state */
+
+        const state = {
+            view: remembered(VIEW_KEY) === 'list' ? 'list' : 'cards',
+            sort: stats.length > 0 ? { key: 'total', desc: true } : { key: 'Name', desc: false },
+            query: '',
+            picks: new Map(), // field -> the values ticked in its pick-list
+        };
+
+        function matches(row) {
+            const terms = state.query.toLowerCase().split(/\s+/).filter(Boolean);
+            if (!terms.every(term => row.text.includes(term))) return false;
+
+            for (const [name, chosen] of state.picks) {
+                if (chosen.size > 0 && !chosen.has(String(row.raw[name] ?? ''))) return false;
+            }
+            return true;
+        }
+
+        // Ties fall back to the leaderboard, then the name, then the order in the file, so the
+        // same data always draws the same way.
+        const settle = (a, b) =>
+            (b.total ?? 0) - (a.total ?? 0)
+            || String(a.raw.Name ?? '').localeCompare(String(b.raw.Name ?? ''))
+            || a.index - b.index;
+
+        function compare(a, b) {
+            const column = byId[state.sort.key];
+            const x = column.sort(a);
+            const y = column.sort(b);
+
+            // Missing values sink to the bottom whichever way the column is sorted.
+            if (blank(x) || blank(y)) {
+                if (blank(x) !== blank(y)) return blank(x) ? 1 : -1;
+                return settle(a, b);
+            }
+
+            const order = typeof x === 'number' && typeof y === 'number'
+                ? x - y
+                : String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' });
+            return (state.sort.desc ? -order : order) || settle(a, b);
+        }
+
+        function sortBy(key) {
+            if (state.sort.key === key) state.sort.desc = !state.sort.desc;
+            else state.sort = { key, desc: Boolean(byId[key].desc) };
+            draw();
+        }
+
+        const filtering = () => state.query.trim() !== '' || [...state.picks.values()].some(set => set.size > 0);
+
+        /* -------------------------------------------------------------- nothing to show */
+
+        if (rows.length === 0) {
+            root.replaceChildren(h('div', { class: 'empty' },
+                h('b', {}, `No ${many} tracked yet.`),
+                config.pending || ''));
+            return;
+        }
+
+        /* -------------------------------------------------------------- controls */
+
+        const search = h('input', {
+            type: 'search',
+            placeholder: `Search ${many}…`,
+            'aria-label': `Search ${many}`,
+            oninput: () => {
+                state.query = search.value;
+                draw();
+            },
+        });
+
+        const picks = facets.map(pickList);
+
+        /** A button that opens a panel of checkboxes, one per value actually present, with counts. */
+        function pickList(name) {
+            const counts = new Map();
+            for (const row of rows) {
+                const value = row.raw[name];
+                if (!blank(value)) counts.set(String(value), (counts.get(String(value)) || 0) + 1);
+            }
+
+            const options = [...counts]
+                .map(([value, count]) => ({ value, count, label: name === 'Galaxy' ? galaxyLabel(value) : value }))
+                .sort((a, b) => (name === 'Galaxy'
+                    ? number(a.value) - number(b.value)
+                    : a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })));
+
+            const chosen = new Set();
+            state.picks.set(name, chosen);
+
+            const badge = h('span', { class: 'count hidden' });
+            const button = h('button', { type: 'button', 'aria-expanded': 'false', 'aria-haspopup': 'true' }, spaced(name), badge);
+            const panel = h('div', { class: 'panel hidden', role: 'group', 'aria-label': spaced(name) },
+                options.map(option => h('label', {},
+                    h('input', {
+                        type: 'checkbox',
+                        value: option.value,
+                        onchange: event => {
+                            if (event.target.checked) chosen.add(option.value);
+                            else chosen.delete(option.value);
+                            update();
+                            draw();
+                        },
+                    }),
+                    option.label,
+                    h('span', { class: 'n' }, option.count))));
+
+            function update() {
+                badge.textContent = chosen.size;
+                badge.classList.toggle('hidden', chosen.size === 0);
+            }
+
+            function show(open) {
+                panel.classList.toggle('hidden', !open);
+                button.setAttribute('aria-expanded', String(open));
+            }
+
+            button.addEventListener('click', () => {
+                const open = panel.classList.contains('hidden');
+                picks.forEach(pick => pick.show(false));
+                show(open);
+            });
+
+            return {
+                node: h('div', { class: 'pick' }, button, panel),
+                show,
+                clear() {
+                    chosen.clear();
+                    panel.querySelectorAll('input').forEach(box => { box.checked = false; });
+                    update();
+                },
+            };
+        }
+
+        const closeAll = () => picks.forEach(pick => pick.show(false));
+        document.addEventListener('click', event => {
+            if (!event.target.closest('.pick')) closeAll();
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') closeAll();
+        });
+
+        function reset() {
+            state.query = '';
+            search.value = '';
+            picks.forEach(pick => pick.clear());
+            draw();
+        }
+
+        const clear = h('button', { type: 'button', class: 'hidden', onclick: reset }, 'Clear filters');
+
+        const sortSelect = h('select', { onchange: () => sortBy(sortSelect.value) },
+            columns.filter(column => column.sort)
+                .sort((a, b) => (b.id === 'total') - (a.id === 'total'))
+                .map(column => h('option', { value: column.id }, column.label)));
+
+        const direction = h('button', {
+            type: 'button',
+            onclick: () => {
+                state.sort.desc = !state.sort.desc;
+                draw();
+            },
+        });
+
+        const viewButtons = [['cards', 'Cards'], ['list', 'List']].map(([view, label]) => h('button', {
+            type: 'button',
+            'data-view': view,
+            onclick: () => {
+                state.view = view;
+                remembered(VIEW_KEY, view);
+                draw();
+            },
+        }, label));
+
+        const tally = h('p', { class: 'tally', 'aria-live': 'polite' });
+        const results = h('div');
+
+        root.replaceChildren(
+            h('div', { class: 'bar' },
+                search,
+                picks.map(pick => pick.node),
+                clear,
+                h('label', { class: 'sortby' }, 'Sort', sortSelect),
+                direction,
+                h('div', { class: 'views', role: 'group', 'aria-label': 'Layout' }, viewButtons)),
+            tally,
+            results);
+
+        /* -------------------------------------------------------------- drawing */
+
+        function draw() {
+            const list = rows.filter(matches).sort(compare);
+            const column = byId[state.sort.key];
+
+            tally.textContent = list.length === rows.length
+                ? `${rows.length} ${rows.length === 1 ? one : many}`
+                : `${list.length} of ${rows.length} ${many}`;
+
+            clear.classList.toggle('hidden', !filtering());
+            sortSelect.value = state.sort.key;
+            direction.textContent = column.numeric
+                ? (state.sort.desc ? 'Highest first' : 'Lowest first')
+                : (state.sort.desc ? 'Z to A' : 'A to Z');
+            viewButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === state.view)));
+
+            if (list.length === 0) {
+                results.replaceChildren(h('div', { class: 'empty' },
+                    h('b', {}, 'Nothing matches.'),
+                    h('button', { type: 'button', class: 'linkish', onclick: reset }, 'Clear the filters')));
+            } else if (state.view === 'list') {
+                results.replaceChildren(table(list));
+            } else {
+                results.replaceChildren(h('div', { class: 'cards' }, list.map(card)));
+            }
+        }
+
+        /** Glyphs to read off and type into a portal, the hex beneath to copy and to check against. */
+        function address(raw, withGalaxy) {
+            const hex = String(raw.Address ?? '').toUpperCase().replace(/[^0-9A-F]/g, '');
+            return h('div', { class: 'addr' },
+                hex && h('span', { class: 'glyphs', 'aria-hidden': 'true' }, hex),
+                hex && h('span', { class: 'hex', title: 'Portal address' }, hex),
+                withGalaxy && !blank(raw.Galaxy) && h('span', { class: 'galaxy' },
+                    'Galaxy ', h('b', {}, raw.Galaxy), galaxyName(raw.Galaxy) && DOT + galaxyName(raw.Galaxy)));
+        }
+
+        function meter(name, value) {
+            const { most, stated } = ceiling[name];
+            const share = most > 0 && Number.isFinite(value) ? Math.max(0, Math.min(1, value / most)) : 0;
+            const title = stated
+                ? `${twoPlaces(value)} of a possible ${most}`
+                : `${Math.round(share * 100)}% of the highest ${spaced(name)} on the board`;
+            return h('div', { class: 'stat', title },
+                h('span', { class: 'k' }, spaced(name)),
+                h('span', { class: 'meter', 'aria-hidden': 'true' }, h('i', { style: `width: ${(share * 100).toFixed(1)}%` })),
+                h('span', { class: leads(name, value) ? 'v best' : 'v' }, twoPlaces(value)));
+        }
+
+        function chips(raw) {
+            const items = [
+                ...tags.filter(name => !blank(raw[name]))
+                    .map(name => h('span', { class: 'chip', title: spaced(name) }, raw[name])),
+                ...extras.filter(name => !blank(raw[name]))
+                    .map(name => h('span', { class: 'chip' }, `${spaced(name)}: `, plain(raw[name]))),
+            ];
+            return items.length > 0 && h('div', { class: 'chips' }, items);
+        }
+
+        function card(row) {
+            const { raw } = row;
+            const src = imagePath(raw.ImageUrl);
+            const seeded = seeds.filter(name => !blank(raw[name]));
+
+            return h('article', { class: 'card' },
+                h(src ? 'a' : 'div', {
+                    class: 'shot',
+                    href: src,
+                    target: src && '_blank',
+                    rel: src && 'noopener',
+                    title: src && 'Open the full image',
+                },
+                src ? picture(src, raw.Name || '') : h('span', { class: 'none' }, 'No image yet'),
+                row.rank != null && h('span', {
+                    class: row.rank <= 3 ? `rank p${row.rank}` : 'rank',
+                    title: 'Place on the board',
+                }, `#${row.rank}`),
+                row.total != null && h('span', { class: 'total' }, h('small', {}, 'Total'), twoPlaces(row.total))),
+
+                h('div', { class: 'card-body' },
+                    h('h2', {}, raw.Name || 'Unnamed'),
+                    chips(raw),
+                    stats.length > 0 && h('div', { class: 'stats' }, stats.map(name => meter(name, number(raw[name])))),
+                    (present('Address') || present('Galaxy')) && address(raw, true),
+                    seeded.length > 0 && h('div', { class: 'seeds' },
+                        seeded.map(name => h('span', { class: 'seed' }, h('b', {}, spaced(name)), ' ', raw[name])))),
+
+                h('div', { class: 'foot' },
+                    !blank(raw.Discoverer) && h('span', {}, 'Found by ', h('span', { class: 'who' }, raw.Discoverer)),
+                    link(raw.Source)));
+        }
+
+        function thumb(row) {
+            const src = imagePath(row.raw.ImageUrl);
+            if (!src) return h('span', { class: 'none', title: 'No image yet' });
+            return h('a', { href: src, target: '_blank', rel: 'noopener' }, picture(src, row.raw.Name || ''));
+        }
+
+        function table(list) {
+            const head = h('tr', {}, columns.map(column => {
+                const key = column.sortsAs || (column.sort ? column.id : null);
+                const active = column.id === state.sort.key;
+                const label = column.hideLabel ? h('span', { class: 'visually-hidden' }, column.label) : column.label;
+
+                return h('th', { scope: 'col', 'aria-sort': active ? (state.sort.desc ? 'descending' : 'ascending') : null },
+                    key
+                        ? h('button', { type: 'button', onclick: () => sortBy(key) },
+                            label,
+                            active && h('span', { class: 'dir' }, state.sort.desc ? ' ▾' : ' ▴'))
+                        : h('span', { class: 'th' }, label));
+            }));
+
+            const body = list.map(row => h('tr', { class: row.rank != null && row.rank <= 3 ? `p${row.rank}` : null },
+                columns.map(column => h('td', {
+                    class: typeof column.cls === 'function' ? column.cls(row) : column.cls,
+                }, column.cell(row)))));
+
+            return h('div', { class: 'wrap' },
+                h('table', {}, h('thead', {}, head), h('tbody', {}, body)));
+        }
+
+        draw();
+    }
+
+    window.Tracker = { render };
+})();

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0a0e14">
+    <title>Companions &middot; NMS Tracker</title>
+    <meta name="description" content="Every companion found with an S-class rating in all three of its traits, and the portal address that leads to it.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 0l2 6 6 2-6 2-2 6-2-6-6-2 6-2z' fill='%23f0b429'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700&amp;display=swap">
+    <link rel="preload" href="fonts/NMS-Glyphs-Mono.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="stylesheet" href="css/tracker.css">
+</head>
+<body>
+    <header class="top">
+        <a class="brand" href="index.html">NMS <b>Tracker</b></a>
+        <nav aria-label="Boards">
+            <a href="starships.html">Starships</a>
+            <a href="freighters.html">Freighters</a>
+            <a href="multi-tools.html">Multi-Tools</a>
+            <a href="companions.html" aria-current="page">Companions</a>
+        </nav>
+    </header>
+
+    <main>
+        <h1>Companions</h1>
+        <p class="blurb">Every companion found with an S-class rating in all three of its traits, and the portal address that leads to it.</p>
+        <div id="board"></div>
+    </main>
+
+    <script src="js/tracker.js"></script>
+    <script>
+        Tracker.render({
+            data: 'data/companions.json',
+            noun: ['companion', 'companions'],
+            // Empty until the first entry arrives. The three S classes are bands over trait
+            // percentages, so whether companions rank by those percentages - or are simply
+            // listed - is decided once there is data to decide it with.
+            stats: [],
+            facets: ['Type', 'Galaxy', 'Discoverer'],
+            seeds: ['Seed'],
+            pending: 'The first one goes in data/companions.json.',
+        });
+    </script>
+</body>
+</html>

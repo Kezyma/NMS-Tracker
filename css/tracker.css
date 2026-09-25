@@ -1,0 +1,521 @@
+/*
+    NMS-Tracker.
+
+    A leaderboard rather than a gallery, so the shape of every page is: rank on the left, the
+    total on the right, and the portal address given enough room to be read off the screen and
+    typed into a portal. Everything else arranges itself around those three.
+
+    One theme block at the top. Nothing below it hard-codes a colour or a size.
+*/
+
+:root {
+    /* Deep and cold, so the gold has something to sit against. */
+    --bg: #0a0e14;
+    --bg-panel: #111823;
+    --bg-raised: #172032;
+    --bg-hover: #1d2840;
+
+    --border: #24304a;
+    --border-strong: #34425f;
+
+    --text: #e6ecf5;
+    --text-dim: #93a3bd;
+    --text-faint: #5d6c88;
+
+    /* Reserved for rankings: totals, the podium, and the best value of each stat. Controls use
+       the accent instead, so gold always means "this is winning". */
+    --gold: #f0b429;
+    --gold-dim: #a9801e;
+    --silver: #c3ccdb;
+    --bronze: #c8823c;
+
+    --accent: #45b6fe;
+    --on-accent: #0a0e14;
+    --accent-dim: #2b6d99;
+    --good: #59d499;
+    --bad: #e2564f;
+
+    --font: 'Titillium Web', 'Segoe UI', system-ui, sans-serif;
+    --font-mono: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+    --font-glyph: 'NMS Glyphs', var(--font-mono);
+
+    --text-xs: 0.72rem;
+    --text-sm: 0.83rem;
+    --text-md: 0.95rem;
+    --text-lg: 1.15rem;
+    --text-xl: 1.6rem;
+    --text-huge: 2.1rem;
+
+    --space-2xs: 0.15rem;
+    --space-xs: 0.3rem;
+    --space-sm: 0.5rem;
+    --space-md: 0.75rem;
+    --space-lg: 1rem;
+    --space-xl: 1.5rem;
+    --space-2xl: 2.25rem;
+
+    --radius-sm: 3px;
+    --radius: 6px;
+    --radius-lg: 10px;
+    --radius-pill: 999px;
+
+    --control-h: 2rem;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --tracked: 0.08em;
+}
+
+/* The game's own portal glyphs. Only 0-9 and A-F are mapped, and only uppercase. */
+@font-face {
+    font-family: 'NMS Glyphs';
+    src: url('../fonts/NMS-Glyphs-Mono.ttf') format('truetype');
+    font-display: block;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: var(--text-md);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); }
+a:hover { color: var(--text); }
+
+/* ------------------------------------------------------------------ chrome */
+
+.top {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xl);
+    flex-wrap: wrap;
+    padding: var(--space-md) var(--space-xl);
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: var(--tracked);
+    text-decoration: none;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.brand b { color: var(--gold); font-weight: 600; }
+
+.top nav { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+
+.top nav a {
+    padding: var(--space-xs) var(--space-md);
+    border-radius: var(--radius-sm);
+    color: var(--text-dim);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: var(--tracked);
+    text-transform: uppercase;
+    text-decoration: none;
+}
+
+.top nav a:hover { background: var(--bg-hover); color: var(--text); }
+
+.top nav a[aria-current='page'] {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+main { padding: var(--space-xl); max-width: 1500px; margin: 0 auto; }
+
+h1 {
+    margin: 0 0 var(--space-2xs);
+    font-size: var(--text-xl);
+    font-weight: 300;
+    letter-spacing: var(--tracked);
+}
+
+.blurb { margin: 0 0 var(--space-xl); color: var(--text-dim); font-size: var(--text-sm); }
+
+/* ------------------------------------------------------------------ filters */
+
+.bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    padding: var(--space-md);
+    margin-bottom: var(--space-lg);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.bar input[type='search'], .bar select, .bar button {
+    height: var(--control-h);
+    padding: 0 var(--space-md);
+    background: var(--bg-raised);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: var(--text-sm);
+}
+
+.bar input[type='search'] { flex: 1 1 14rem; min-width: 0; }
+.bar input[type='search']::placeholder { color: var(--text-faint); }
+.bar button { cursor: pointer; }
+.bar button:hover { background: var(--bg-hover); }
+
+.bar label { color: var(--text-dim); font-size: var(--text-sm); }
+
+/* A pick-list: a button that opens a panel of checkboxes. */
+.pick { position: relative; }
+
+.pick > button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    white-space: nowrap;
+}
+
+.pick > button .count {
+    padding: 0 var(--space-xs);
+    background: var(--accent);
+    color: var(--on-accent);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-xs);
+    font-weight: 700;
+}
+
+.pick .panel {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 14rem;
+    max-height: 18rem;
+    overflow-y: auto;
+    padding: var(--space-xs);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.pick .panel label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.pick .panel label:hover { background: var(--bg-hover); }
+.pick .panel .n { margin-left: auto; color: var(--text-faint); font-size: var(--text-xs); }
+.pick input[type='checkbox'] { accent-color: var(--accent); margin: 0; }
+
+.views { margin-left: auto; display: flex; }
+.views button { border-radius: 0; }
+.views button:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.views button:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-left: -1px; }
+.views button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+
+.sortby { display: inline-flex; align-items: center; gap: var(--space-xs); }
+
+.tally { margin: 0 0 var(--space-lg); color: var(--text-faint); font-size: var(--text-sm); }
+
+/* ------------------------------------------------------------------ address */
+
+/*
+    The reason anyone is here: the glyphs you retype into a portal. Given real size, with the
+    hex beneath it for copying, because reading glyphs off a screen is error-prone and the
+    two together let you check yourself.
+*/
+.addr { display: flex; flex-direction: column; gap: var(--space-2xs); }
+
+.glyphs {
+    font-family: var(--font-glyph);
+    font-size: 1.45rem;
+    line-height: 1.25;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    word-break: break-all;
+}
+
+.hex {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    user-select: all;
+}
+
+.galaxy { font-size: var(--text-xs); color: var(--text-dim); }
+.galaxy b { color: var(--text); font-weight: 600; }
+
+/* ------------------------------------------------------------------ cards */
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+    gap: var(--space-lg);
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.card:hover { border-color: var(--border-strong); }
+
+.shot {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--bg-raised);
+    overflow: hidden;
+}
+
+.shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.shot .none {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-faint);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracked);
+    text-transform: uppercase;
+}
+
+/* Rank and total ride on the image, which is where the eye lands first. */
+.rank {
+    position: absolute;
+    top: var(--space-sm);
+    left: var(--space-sm);
+    min-width: 2rem;
+    padding: var(--space-2xs) var(--space-sm);
+    background: rgba(10, 14, 20, 0.85);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-align: center;
+}
+
+.rank.p1 { background: var(--gold); color: #14223b; border-color: var(--gold); }
+.rank.p2 { background: var(--silver); color: #14223b; border-color: var(--silver); }
+.rank.p3 { background: var(--bronze); color: #14223b; border-color: var(--bronze); }
+
+.total {
+    position: absolute;
+    right: var(--space-sm);
+    bottom: var(--space-sm);
+    padding: var(--space-2xs) var(--space-sm);
+    background: rgba(10, 14, 20, 0.85);
+    border: 1px solid var(--gold-dim);
+    border-radius: var(--radius-sm);
+    color: var(--gold);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.total small {
+    display: block;
+    color: var(--text-faint);
+    font-size: 0.6rem;
+    font-weight: 400;
+    letter-spacing: var(--tracked);
+    text-transform: uppercase;
+}
+
+.card-body { display: flex; flex-direction: column; gap: var(--space-md); padding: var(--space-md); }
+
+.card h2 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+
+.chip {
+    padding: 0 var(--space-sm);
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    color: var(--text-dim);
+    font-size: var(--text-xs);
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+/* Each stat against the most it can be (data/maximums.json), so a card reads at a glance. */
+.stats { display: flex; flex-direction: column; gap: var(--space-xs); }
+.stat { display: grid; grid-template-columns: 7.5rem 1fr 3.2rem; align-items: center; gap: var(--space-sm); }
+.stat .k { color: var(--text-dim); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em; }
+.stat .v { font-family: var(--font-mono); font-size: var(--text-xs); text-align: right; }
+
+.meter { height: 4px; background: var(--bg-raised); border-radius: var(--radius-pill); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+
+.card .foot {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    padding: var(--space-sm) var(--space-md);
+    border-top: 1px solid var(--border);
+    color: var(--text-faint);
+    font-size: var(--text-xs);
+}
+
+.card .foot .who { color: var(--text-dim); }
+.card .foot a { margin-left: auto; }
+
+.seeds { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.seed { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-dim); }
+.seed b { color: var(--text-faint); font-weight: 400; }
+
+/* ------------------------------------------------------------------ table */
+
+/*
+    Scrolls sideways when the columns outgrow the screen, but never up and down: the boards are
+    short, and a second vertical scrollbar inside the page costs more than a pinned header gains.
+*/
+.wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+
+thead th {
+    padding: 0;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border-strong);
+    text-align: left;
+    white-space: nowrap;
+}
+
+thead th button {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: var(--tracked);
+    text-transform: uppercase;
+    text-align: inherit;
+    cursor: pointer;
+}
+
+thead th button:hover { color: var(--text); background: var(--bg-hover); }
+thead th[aria-sort] button { color: var(--accent); }
+
+thead th .th {
+    display: block;
+    padding: var(--space-sm) var(--space-md);
+    color: var(--text-dim);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: var(--tracked);
+    text-transform: uppercase;
+}
+thead th .dir { opacity: 0.8; }
+
+tbody td {
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* Fields the page config does not name could be anything, including a paragraph. */
+td.extra { white-space: normal; min-width: 12rem; }
+tbody tr:hover { background: var(--bg-hover); }
+tbody tr:last-child td { border-bottom: none; }
+
+td.num { font-family: var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.tot { color: var(--gold); font-weight: 700; }
+td.pos { color: var(--text-faint); text-align: right; font-variant-numeric: tabular-nums; }
+td.name { font-weight: 600; white-space: nowrap; }
+td.shot-cell { width: 68px; padding: var(--space-xs) var(--space-sm); }
+td.shot-cell img, td.shot-cell .none {
+    display: block;
+    width: 60px;
+    height: 34px;
+    object-fit: cover;
+    background: var(--bg-raised);
+    border-radius: var(--radius-sm);
+    font-size: 0;
+}
+/* On a card the glyphs may wrap; in a row they hold their line and the table scrolls instead. */
+td.addr-cell .glyphs { font-size: 1.15rem; white-space: nowrap; word-break: normal; }
+td.seed { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; }
+
+tr.p1 td.pos { color: var(--gold); font-weight: 700; }
+tr.p2 td.pos { color: var(--silver); font-weight: 700; }
+tr.p3 td.pos { color: var(--bronze); font-weight: 700; }
+
+/* The best value of a stat across the board, when there is more than one entry to beat. */
+.best { color: var(--gold); font-weight: 700; }
+
+/* ------------------------------------------------------------------ states */
+
+.empty {
+    padding: var(--space-2xl);
+    background: var(--bg-panel);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--text-faint);
+    text-align: center;
+}
+
+.empty b { display: block; margin-bottom: var(--space-xs); color: var(--text-dim); font-size: var(--text-lg); }
+
+.linkish {
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--accent);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.linkish:hover { color: var(--text); }
+
+.hidden { display: none !important; }
+
+.visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 720px) {
+    main { padding: var(--space-md); }
+    .top { padding: var(--space-sm) var(--space-md); gap: var(--space-md); }
+    .cards { grid-template-columns: 1fr; }
+    .views { margin-left: 0; width: 100%; }
+    .views button { flex: 1; }
+    .stat { grid-template-columns: 6rem 1fr 3rem; }
+}
