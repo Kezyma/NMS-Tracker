@@ -83,6 +83,56 @@
         return img;
     }
 
+    let lightbox;
+
+    /**
+     * The one full-page viewer every image on the page shares, made on first use. Built on
+     * <dialog>, which brings the backdrop and Escape to close, and keeps focus inside while it
+     * is open.
+     */
+    function viewer() {
+        if (lightbox) return lightbox;
+
+        const img = h('img', { alt: '' });
+        const title = h('span', { class: 'title' });
+        const detail = h('span', { class: 'detail' });
+        const close = h('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, '×');
+        const dialog = h('dialog', { class: 'lightbox' },
+            close,
+            h('figure', {}, img, h('figcaption', {}, title, detail)));
+
+        // Anywhere but the picture itself closes it - the backdrop, the caption, the button.
+        dialog.addEventListener('click', event => {
+            if (event.target !== img) dialog.close();
+        });
+        // So the next picture never opens showing the last one while it loads.
+        dialog.addEventListener('close', () => img.removeAttribute('src'));
+        document.body.append(dialog);
+
+        lightbox = {
+            show(src, name, note) {
+                img.src = src;
+                img.alt = name;
+                title.textContent = name;
+                detail.textContent = note;
+                dialog.setAttribute('aria-label', name || 'Image');
+                dialog.showModal();
+            },
+        };
+        return lightbox;
+    }
+
+    /** A link to a full image that opens in the viewer. A modified or middle click still opens a tab. */
+    function viewable(link, name, note) {
+        link.addEventListener('click', event => {
+            if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            // No href means the file failed to load and the picture became a placeholder.
+            if (link.hasAttribute('href')) viewer().show(link.getAttribute('href'), name || '', note || '');
+        });
+        return link;
+    }
+
     /** A URL as a short link named for its site; anything else as plain text. */
     function link(value) {
         const text = String(value ?? '').trim();
@@ -196,6 +246,17 @@
                 : { most: highest[name], stated: false };
         }
 
+        // The most the total can be, stated as "Total" in the same file. It is its own number
+        // rather than the sum of the stat maximums, which for starships and multi-tools add up
+        // to more. With it, the total is shown as a share of it; without it, as the raw sum.
+        const possible = number(maximums?.[board]?.Total);
+        const outOf = Number.isFinite(possible) && possible > 0 ? possible : null;
+        const score = total => (outOf ? `${(total / outOf * 100).toFixed(1)}%` : twoPlaces(total));
+        const scoreTitle = total => (outOf ? `${twoPlaces(total)} of a possible ${outOf}` : null);
+
+        // Beneath a picture in the viewer: where it stands on the board.
+        const caption = row => (row.rank != null ? `#${row.rank}${DOT}${score(row.total)}` : '');
+
         /* -------------------------------------------------------------- columns */
 
         const field = name => row => row.raw[name];
@@ -215,7 +276,7 @@
             })),
             stats.length > 0 && {
                 id: 'total', label: 'Total', numeric: true, desc: true, cls: 'num tot',
-                sort: row => row.total, cell: row => twoPlaces(row.total),
+                sort: row => row.total, cell: row => score(row.total), title: row => scoreTitle(row.total),
             },
             present('Galaxy') && {
                 id: 'Galaxy', label: 'Galaxy', numeric: true,
@@ -487,20 +548,18 @@
             const src = imagePath(raw.ImageUrl);
             const seeded = seeds.filter(name => !blank(raw[name]));
 
-            return h('article', { class: 'card' },
-                h(src ? 'a' : 'div', {
-                    class: 'shot',
-                    href: src,
-                    target: src && '_blank',
-                    rel: src && 'noopener',
-                    title: src && 'Open the full image',
-                },
+            const shot = h(src ? 'a' : 'div', { class: 'shot', href: src, title: src && 'View full size' },
                 src ? picture(src, raw.Name || '') : h('span', { class: 'none' }, 'No image yet'),
                 row.rank != null && h('span', {
                     class: row.rank <= 3 ? `rank p${row.rank}` : 'rank',
                     title: 'Place on the board',
                 }, `#${row.rank}`),
-                row.total != null && h('span', { class: 'total' }, h('small', {}, 'Total'), twoPlaces(row.total))),
+                row.total != null && h('span', { class: 'total', title: scoreTitle(row.total) },
+                    h('small', {}, 'Total'), score(row.total)));
+            if (src) viewable(shot, raw.Name, caption(row));
+
+            return h('article', { class: 'card' },
+                shot,
 
                 h('div', { class: 'card-body' },
                     h('h2', {}, raw.Name || 'Unnamed'),
@@ -518,7 +577,8 @@
         function thumb(row) {
             const src = imagePath(row.raw.ImageUrl);
             if (!src) return h('span', { class: 'none', title: 'No image yet' });
-            return h('a', { href: src, target: '_blank', rel: 'noopener' }, picture(src, row.raw.Name || ''));
+            return viewable(h('a', { href: src, title: 'View full size' }, picture(src, row.raw.Name || '')),
+                row.raw.Name, caption(row));
         }
 
         function table(list) {
@@ -538,6 +598,7 @@
             const body = list.map(row => h('tr', { class: row.rank != null && row.rank <= 3 ? `p${row.rank}` : null },
                 columns.map(column => h('td', {
                     class: typeof column.cls === 'function' ? column.cls(row) : column.cls,
+                    title: column.title ? column.title(row) : null,
                 }, column.cell(row)))));
 
             return h('div', { class: 'wrap' },

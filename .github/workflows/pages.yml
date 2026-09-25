@@ -27,7 +27,8 @@ jobs:
       # A hand-edited file with a trailing comma deploys happily and then shows an error on the
       # page. The live site is case-sensitive where Windows is not, so an image named Ship.PNG
       # in the data and saved as ship.png works locally and breaks once deployed. And a stat
-      # misspelt in maximums.json quietly stops its meter using the maximum.
+      # misspelt in maximums.json quietly stops its meter using the maximum. (Total is the one
+      # name there that is not a stat: it is the most the sum can be.)
       - name: Every data file parses, every image exists, every maximum names a real stat
         shell: python
         run: |
@@ -76,7 +77,8 @@ jobs:
                   failed = True
                   continue
               for stat in stats:
-                  if fields and stat not in fields:
+                  # Total is the most the sum can be, not a field in the data.
+                  if fields and stat != 'Total' and stat not in fields:
                       print(f'::error file=data/maximums.json::{board}: no entry has a field named "{stat}"')
                       failed = True
 

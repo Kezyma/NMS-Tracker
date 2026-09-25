@@ -11,7 +11,7 @@
         "Address": "40AFECFA6A5B",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1hqawrw/happy_new_yearcrashed_exotic_light_red_crimson/",
         "Discoverer": "Servalin",
-        "ImageUrl": ""
+        "ImageUrl": "S_0x18BF9408F8FB6EB6.jpg"
     },
     {
         "Name": "GS3 Tebash",
@@ -25,7 +25,7 @@
         "Address": "101011111100",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1fwzkoh/exotic_with_4_sc_slots_square_config_love_the/",
         "Discoverer": "Amazing-Ad9065",
-        "ImageUrl": ""
+        "ImageUrl": "S_0xE19392FB05F085E9.jpg"
     },
     {
         "Name": "Hihar's Reckless Star-Sailor",
@@ -39,6 +39,34 @@
         "Address": "122CFCEE2E82",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1ivmfm4/white_exotic_ship_4_square_supercharged_slots/",
         "Discoverer": "Runner9905",
-        "ImageUrl": ""
+        "ImageUrl": "S_0xBE32393D9C0A1712.jpg"
+    },
+    {
+        "Name": "Final Focus WR5",
+        "Type": "Explorer",
+        "Seed": "0xA4F1253596FB39AF",
+        "Damage": 0.0,
+        "Shield": 30.976011276245118,
+        "Hyperdrive": 110.20436096191406,
+        "Manoeuvrability": 27.04231834411621,
+        "Galaxy": 1,
+        "Address": "11B00DB1DF83",
+        "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1kzr7ba/explorer_ship_with_square_layout_supercharged_2x2/",
+        "Discoverer": "Jarl6969",
+        "ImageUrl": "S_0xA4F1253596FB39AF.jpg"
+    },
+    {
+        "Name": "PE9 Bungo",
+        "Type": "Shuttle",
+        "Seed": "0xCFE998FC801E1E45",
+        "Damage": 26.383281707763673,
+        "Shield": 26.848751068115236,
+        "Hyperdrive": 25.740020751953126,
+        "Manoeuvrability": 26.00204086303711,
+        "Galaxy": 2,
+        "Address": "1120FDA14C9C",
+        "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1kknce7/4_square_supercharged_shuttle_wsymmetrical_hover/",
+        "Discoverer": "Frosty-Abies-3317",
+        "ImageUrl": "S_0xCFE998FC801E1E45.jpg"
     }
 ]

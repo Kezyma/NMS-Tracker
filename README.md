@@ -21,6 +21,8 @@ these ones have a job:
 
 `data/maximums.json` holds the most each stat can be, per board, and the meters on the cards are
 drawn against it. Its names must match the fields in the data exactly - `Scan`, not `Scanning`.
+`Total` is the most the sum can be, and the total is shown as a percentage of it. It is set on its
+own because it is not the sum of the stat maximums.
 
 Which fields are stats, which get a pick-list, and which are seeds is set in each page's own
 config, at the bottom of its HTML file. Any field not named there still appears, as a column in
