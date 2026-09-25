@@ -43,3 +43,5 @@ Pushing to `main` deploys through GitHub Actions, once the repository's Settings
 Source is set to **GitHub Actions**. The deploy stops if a data file does not parse, if an image
 named in the data is not in `img/`, or if any path starts with `/` - which works locally and
 breaks under `/NMS-Tracker/`.
+
+
