@@ -137,7 +137,7 @@
         const next = h('button', { type: 'button', class: 'step next', 'aria-label': 'Next picture' }, '›');
         const dialog = h('dialog', { class: 'lightbox' },
             close, back, next,
-            h('figure', {}, img, h('figcaption', {}, title, detail, count)));
+            h('figure', {}, h('div', { class: 'frame' }, img), h('figcaption', {}, title, detail, count)));
 
         let slides = [];
         let index = 0;
