@@ -138,5 +138,19 @@
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1qmujj9/4_square_crashed_fighter/",
         "Discoverer": "Street-Fee-8458",
         "ImageUrl": "Falcon of the Tomerig.jpg"
+    },
+    {
+        "Name": "Floating Numat IV",
+        "Type": "Fighter",
+        "Seed": "0x72E2FC22B5B5A7D8",
+        "Damage": 75.17898559570313,
+        "Shield": 31.145612716674806,
+        "Hyperdrive": 0.0,
+        "Manoeuvrability": 43.72643280029297,
+        "Galaxy": 1,
+        "Address": "11B0FA9D6CE6",
+        "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/172xjvr/fighter_ship_with_4_supercharged_together_square/",
+        "Discoverer": "Amaral_PRB",
+        "ImageUrl": "Floating Numat IV.jpg"
     }
 ]
