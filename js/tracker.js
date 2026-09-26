@@ -73,6 +73,21 @@
         return 'img/' + file.split('/').map(encodeURIComponent).join('/');
     }
 
+    /**
+     * A type as a chip in its own colour. The stylesheet colours the types it lists; any other
+     * gets one made from its name, so a new type is coloured too, and always the same.
+     */
+    function typeChip(type) {
+        let hash = 0;
+        for (const char of String(type)) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
+        return h('span', {
+            class: 'chip type',
+            'data-type': type,
+            style: `--type-auto: hsl(${hash % 360} 70% 70%)`,
+            title: 'Type',
+        }, type);
+    }
+
     /** An image that becomes a placeholder, rather than a broken icon, if the file is missing. */
     function picture(src, alt) {
         const img = h('img', { src, alt, loading: 'lazy', decoding: 'async' });
@@ -110,11 +125,12 @@
         document.body.append(dialog);
 
         lightbox = {
+            /** The note is one line of text, or a list of them. */
             show(src, name, note) {
                 img.src = src;
                 img.alt = name;
                 title.textContent = name;
-                detail.textContent = note;
+                detail.replaceChildren(...[].concat(note).flatMap((line, i) => (i > 0 ? [h('br'), line] : [line])));
                 dialog.setAttribute('aria-label', name || 'Image');
                 dialog.showModal();
             },
@@ -128,7 +144,7 @@
             if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
             // No href means the file failed to load and the picture became a placeholder.
-            if (link.hasAttribute('href')) viewer().show(link.getAttribute('href'), name || '', note || '');
+            if (link.hasAttribute('href')) viewer().show(link.getAttribute('href'), name || '', note || []);
         });
         return link;
     }
@@ -174,14 +190,14 @@
 
         let data;
         let galaxies;
-        let maximums;
+        let ranges;
         try {
-            [data, galaxies, maximums] = await Promise.all([
+            [data, galaxies, ranges] = await Promise.all([
                 load(config.data),
-                // Both niceties: without names the numbers still work, and without maximums
-                // the meters are drawn against the best on the board.
+                // Both niceties: without names the numbers still work, and without ranges the
+                // meters are drawn against the best on the board.
                 load('data/galaxies.json').catch(() => ({})),
-                load('data/maximums.json').catch(() => ({})),
+                load('data/ranges.json').catch(() => ({})),
             ]);
             if (!Array.isArray(data)) throw new Error('Expected a list of entries.');
         } catch (error) {
@@ -203,30 +219,72 @@
         const extras = fields.filter(name =>
             !PLACED.has(name) && !stats.includes(name) && !facets.includes(name) && !seeds.includes(name));
 
-        const rows = entries.map((raw, index) => ({
-            raw,
-            index,
-            total: stats.length > 0
+        // What the stats can be, from data/ranges.json under this board's file name - "starships"
+        // for data/starships.json. The board's own figures are the most a stat, and the total,
+        // can be across every type. Under Types, each type's S-class floor and limit per stat.
+        const board = config.data.split('/').pop().replace(/\.json$/i, '');
+        const limits = (ranges && ranges[board]) || {};
+        const types = limits.Types || {};
+        const typed = stats.length > 0 && Object.keys(types).length > 0;
+        const pair = value => (Array.isArray(value) && value.length === 2 && value.every(Number.isFinite) ? value : null);
+
+        const rows = entries.map((raw, index) => {
+            const total = stats.length > 0
                 ? stats.reduce((sum, name) => sum + (Number.isFinite(number(raw[name])) ? number(raw[name]) : 0), 0)
-                : null,
-            rank: null,
-            text: [...fields.map(name => raw[name]), galaxyName(raw.Galaxy)]
-                .filter(value => typeof value === 'string')
-                .join('\n')
-                .toLowerCase(),
-        }));
+                : null;
+
+            // A type's worst and best possible totals, when every stat of it has a range.
+            const range = typed && !blank(raw.Type) ? types[raw.Type] : null;
+            const bounds = range ? stats.map(name => pair(range[name])) : [];
+            const whole = bounds.length > 0 && bounds.every(Boolean);
+            const floor = whole ? bounds.reduce((sum, [low]) => sum + low, 0) : null;
+            const limit = whole ? bounds.reduce((sum, [, high]) => sum + high, 0) : null;
+
+            return {
+                raw,
+                index,
+                total,
+                rank: null,
+                typeRank: null,
+                range,
+                floor,
+                limit,
+                // Where the total sits between the worst S-class roll of its type and the best:
+                // 0 is the floor, 1 a perfect roll.
+                typeScore: whole && limit > floor ? (total - floor) / (limit - floor) : null,
+                text: [...fields.map(name => raw[name]), galaxyName(raw.Galaxy)]
+                    .filter(value => typeof value === 'string')
+                    .join('\n')
+                    .toLowerCase(),
+            };
+        });
 
         // Competition ranking: equal totals share a place and the next place is skipped, so two
         // ships tied for first are both #1 and the one after them is #3.
-        if (stats.length > 0) {
-            const order = [...rows].sort((a, b) => b.total - a.total);
+        function rankBy(list, key) {
+            const order = [...list].sort((a, b) => b.total - a.total);
             order.forEach((row, i) => {
-                row.rank = i > 0 && row.total === order[i - 1].total ? order[i - 1].rank : i + 1;
+                row[key] = i > 0 && row.total === order[i - 1].total ? order[i - 1][key] : i + 1;
             });
         }
 
-        // The highest of each stat. The meters are drawn against it, and when there is more
-        // than one entry to compare, whoever holds it is picked out.
+        if (stats.length > 0) rankBy(rows, 'rank');
+
+        // The same again within each type, on a board whose types have ranges.
+        if (typed) {
+            const groups = new Map();
+            for (const row of rows.filter(r => !blank(r.raw.Type))) {
+                const key = String(row.raw.Type);
+                groups.set(key, [...(groups.get(key) || []), row]);
+            }
+            groups.forEach(group => {
+                rankBy(group, 'typeRank');
+                group.forEach(row => { row.typeCount = group.length; });
+            });
+        }
+
+        // The highest of each stat. When there is more than one entry to compare, whoever holds
+        // it is picked out - and with no range to draw against, the meters use it instead.
         const highest = {};
         for (const name of stats) {
             const values = rows.map(row => number(row.raw[name])).filter(Number.isFinite);
@@ -234,28 +292,78 @@
         }
         const leads = (name, value) => rows.length > 1 && Number.isFinite(value) && value === highest[name];
 
-        // The most each stat can be, from data/maximums.json under this board's file name -
-        // "starships" for data/starships.json. A stat with no maximum there is drawn against the
-        // best on the board instead, and its meter says which it is.
-        const board = config.data.split('/').pop().replace(/\.json$/i, '');
-        const ceiling = {};
-        for (const name of stats) {
-            const stated = number(maximums?.[board]?.[name]);
-            ceiling[name] = Number.isFinite(stated) && stated > 0
-                ? { most: stated, stated: true }
-                : { most: highest[name], stated: false };
+        /**
+         * The top of a stat's bar: the most any type can roll, so bars compare across types. It
+         * is the board's own figure, or failing that the highest type limit, or failing that the
+         * best on the board.
+         */
+        function ceiling(name) {
+            const stated = number(limits[name]);
+            if (Number.isFinite(stated) && stated > 0) return { most: stated, known: true };
+
+            const reach = Object.values(types).map(spans => pair(spans[name])?.[1]).filter(Number.isFinite);
+            if (reach.length > 0 && Math.max(...reach) > 0) return { most: Math.max(...reach), known: true };
+            return { most: highest[name], known: false };
         }
 
-        // The most the total can be, stated as "Total" in the same file. It is its own number
-        // rather than the sum of the stat maximums, which for starships and multi-tools add up
-        // to more. With it, the total is shown as a share of it; without it, as the raw sum.
-        const possible = number(maximums?.[board]?.Total);
-        const outOf = Number.isFinite(possible) && possible > 0 ? possible : null;
-        const score = total => (outOf ? `${(total / outOf * 100).toFixed(1)}%` : twoPlaces(total));
-        const scoreTitle = total => (outOf ? `${twoPlaces(total)} of a possible ${outOf}` : null);
+        /** The S-class [floor, limit] an entry's type can roll for a stat, when known. */
+        const bounds = (row, name) => (row.range ? pair(row.range[name]) : null);
 
-        // Beneath a picture in the viewer: where it stands on the board.
-        const caption = row => (row.rank != null ? `#${row.rank}${DOT}${score(row.total)}` : '');
+        /** A value its type cannot roll at S-class: a typo, or an entry that is not S-class. */
+        function outside(row, name, value) {
+            const known = bounds(row, name);
+            return Boolean(known) && Number.isFinite(value) && (value < known[0] || value > known[1]);
+        }
+
+        /** How one stat reads, in words, for a tooltip. */
+        function statTitle(row, name) {
+            const value = number(row.raw[name]);
+            const { most, known } = ceiling(name);
+            const head = known
+                ? `${spaced(name)} ${twoPlaces(value)}, of a possible ${figure(most)}.`
+                : `${spaced(name)} ${twoPlaces(value)}. The best on the board is ${twoPlaces(most)}.`;
+
+            const range = bounds(row, name);
+            if (!range) return head;
+            if (range[0] === range[1]) return `${head} Always ${figure(range[0])} on an S-class ${row.raw.Type}.`;
+            return `${head} An S-class ${row.raw.Type} rolls ${figure(range[0])} to ${figure(range[1])}`
+                + (outside(row, name, value) ? ' - and this is outside that, so a typo or not S-class.' : '.');
+        }
+
+        // The score runs from the least a total can be to the most. The most is stated as "Total"
+        // in the same file: its own number rather than the sum of the stat maximums, which for
+        // starships and multi-tools add up to more. The least is the lowest total any type can
+        // roll, worked out from the types so the two cannot drift apart; a board without types
+        // counts from nothing. With no "Total" at all, the raw sum is shown instead.
+        const possible = number(limits.Total);
+        const floors = !typed ? [] : Object.values(types)
+            .map(spans => stats.map(name => pair(spans[name])))
+            .filter(ends => ends.every(Boolean))
+            .map(ends => ends.reduce((sum, [low]) => sum + low, 0));
+        const least = floors.length > 0 ? Math.min(...floors) : 0;
+        const outOf = Number.isFinite(possible) && possible > least ? possible : null;
+
+        const percent = share => `${(share * 100).toFixed(1)}%`;
+        const figure = value => (Number.isInteger(value) ? String(value) : twoPlaces(value));
+        const score = total => (outOf ? percent((total - least) / (outOf - least)) : twoPlaces(total));
+        const scoreTitle = total => (!outOf ? null
+            : least > 0
+                ? `${twoPlaces(total)}: ${score(total)} of the way from ${figure(least)}, the lowest total any `
+                  + `S-class ${one} can have, to ${figure(outOf)}, the highest`
+                : `${twoPlaces(total)} of a possible ${figure(outOf)}`);
+        const typeTitle = row => (row.typeScore == null ? null
+            : `An S-class ${row.raw.Type} totals ${figure(row.floor)} at worst and ${figure(row.limit)} at best. `
+              + `At ${twoPlaces(row.total)}, this one is ${percent(row.typeScore)} of the way.`);
+
+        // Beneath a picture in the viewer: where it stands among every entry - "#4 Starship" - and
+        // then among its own type, "#1 Explorer".
+        const singular = one.charAt(0).toUpperCase() + one.slice(1);
+        const caption = row => [
+            row.rank != null ? `#${row.rank} ${singular}${DOT}${score(row.total)}` : '',
+            row.typeRank != null
+                ? `#${row.typeRank} ${row.raw.Type}${row.typeScore != null ? DOT + percent(row.typeScore) : ''}`
+                : '',
+        ].filter(Boolean);
 
         /* -------------------------------------------------------------- columns */
 
@@ -265,6 +373,10 @@
             { id: 'image', label: 'Image', hideLabel: true, cls: 'shot-cell', cell: thumb },
             { id: 'Name', label: 'Name', cls: 'name', sort: field('Name'), cell: row => row.raw.Name },
             ...tags.map(name => ({ id: name, label: spaced(name), sort: field(name), cell: row => plain(row.raw[name]) })),
+            typed && {
+                id: 'typeRank', label: 'Type #', numeric: true, cls: 'num',
+                sort: row => row.typeRank, cell: row => row.typeRank,
+            },
             ...stats.map(name => ({
                 id: name,
                 label: spaced(name),
@@ -272,11 +384,21 @@
                 desc: true,
                 sort: row => number(row.raw[name]),
                 cell: row => twoPlaces(number(row.raw[name])),
-                cls: row => (leads(name, number(row.raw[name])) ? 'num best' : 'num'),
+                cls: row => {
+                    const value = number(row.raw[name]);
+                    return ['num', leads(name, value) && 'best', outside(row, name, value) && 'out'].filter(Boolean).join(' ');
+                },
+                title: row => statTitle(row, name),
             })),
             stats.length > 0 && {
                 id: 'total', label: 'Total', numeric: true, desc: true, cls: 'num tot',
                 sort: row => row.total, cell: row => score(row.total), title: row => scoreTitle(row.total),
+            },
+            typed && {
+                id: 'typeScore', label: 'Type score', numeric: true, desc: true, cls: 'num',
+                sort: row => row.typeScore,
+                cell: row => (row.typeScore == null ? '' : percent(row.typeScore)),
+                title: typeTitle,
             },
             present('Galaxy') && {
                 id: 'Galaxy', label: 'Galaxy', numeric: true,
@@ -511,34 +633,70 @@
             }
         }
 
-        /** Glyphs to read off and type into a portal, the hex beneath to copy and to check against. */
+        /**
+         * Glyphs to read off and type into a portal, then a line beneath with the galaxy on the
+         * left and the hex on the right, to copy and to check the glyphs against.
+         */
         function address(raw, withGalaxy) {
             const hex = String(raw.Address ?? '').toUpperCase().replace(/[^0-9A-F]/g, '');
+            const galaxy = withGalaxy && !blank(raw.Galaxy) && h('span', { class: 'galaxy' },
+                'Galaxy ', h('b', {}, raw.Galaxy), galaxyName(raw.Galaxy) && DOT + galaxyName(raw.Galaxy));
             return h('div', { class: 'addr' },
                 hex && h('span', { class: 'glyphs', 'aria-hidden': 'true' }, hex),
-                hex && h('span', { class: 'hex', title: 'Portal address' }, hex),
-                withGalaxy && !blank(raw.Galaxy) && h('span', { class: 'galaxy' },
-                    'Galaxy ', h('b', {}, raw.Galaxy), galaxyName(raw.Galaxy) && DOT + galaxyName(raw.Galaxy)));
+                (galaxy || hex) && h('div', { class: 'addr-line' },
+                    galaxy,
+                    hex && h('span', { class: 'hex', title: 'Portal address' }, hex)));
         }
 
-        function meter(name, value) {
-            const { most, stated } = ceiling[name];
-            const share = most > 0 && Number.isFinite(value) ? Math.max(0, Math.min(1, value / most)) : 0;
-            const title = stated
-                ? `${twoPlaces(value)} of a possible ${most}`
-                : `${Math.round(share * 100)}% of the highest ${spaced(name)} on the board`;
-            return h('div', { class: 'stat', title },
+        /**
+         * One stat on a card: its name, a bar and its value. Every bar runs from nothing to the
+         * most any type can roll, so bars compare across types, and two ticks on it mark the
+         * floor and the limit of this entry's own type. The fill is paler up to the floor, since
+         * every roll of that type gets that far; only the part past it was won.
+         */
+        function meter(row, name) {
+            const value = number(row.raw[name]);
+            const { most } = ceiling(name);
+            const at = v => (most > 0 && Number.isFinite(v) ? Math.max(0, Math.min(100, (v / most) * 100)) : 0);
+            const range = bounds(row, name);
+
+            // Where the floor falls along the fill itself, which is what the gradient is drawn on.
+            const fill = at(value);
+            const floor = range && fill > 0 ? Math.min(100, (at(range[0]) / fill) * 100) : 0;
+
+            return h('div', { class: 'stat', title: statTitle(row, name) },
                 h('span', { class: 'k' }, spaced(name)),
-                h('span', { class: 'meter', 'aria-hidden': 'true' }, h('i', { style: `width: ${(share * 100).toFixed(1)}%` })),
-                h('span', { class: leads(name, value) ? 'v best' : 'v' }, twoPlaces(value)));
+                h('span', { class: 'meter', 'aria-hidden': 'true' },
+                    h('i', { style: `width: ${fill.toFixed(1)}%; --floor: ${floor.toFixed(1)}%` }),
+                    range && range.map(end => h('span', { class: 'tick', style: `left: ${at(end).toFixed(1)}%` }))),
+                h('span', { class: ['v', leads(name, value) && 'best', outside(row, name, value) && 'out'].filter(Boolean).join(' ') },
+                    twoPlaces(value)));
         }
 
-        function chips(raw) {
+        /**
+         * On the right of the seeds: the place within its type, the type and the score, "#4",
+         * "Explorer", "92.9%". The place is coloured like the overall one, the type by type.
+         */
+        function standing(row) {
+            const { raw } = row;
+            return row.typeRank != null && h('span', {
+                class: 'standing',
+                title: [`#${row.typeRank} of ${row.typeCount} ${raw.Type} entries.`, typeTitle(row)].filter(Boolean).join(' '),
+            },
+            h('span', { class: row.typeRank <= 3 ? `place p${row.typeRank}` : 'place' }, `#${row.typeRank}`),
+            typeChip(raw.Type),
+            row.typeScore != null && h('b', {}, percent(row.typeScore)));
+        }
+
+        /** Tags under the name. The type is left out when the standing beside the seeds shows it. */
+        function chips(row) {
+            const { raw } = row;
+            const shown = name => !blank(raw[name]) && !(name === 'Type' && row.typeRank != null);
             const items = [
-                ...tags.filter(name => !blank(raw[name]))
-                    .map(name => h('span', { class: 'chip', title: spaced(name) }, raw[name])),
-                ...extras.filter(name => !blank(raw[name]))
-                    .map(name => h('span', { class: 'chip' }, `${spaced(name)}: `, plain(raw[name]))),
+                ...tags.filter(shown).map(name => (name === 'Type'
+                    ? typeChip(raw[name])
+                    : h('span', { class: 'chip', title: spaced(name) }, raw[name]))),
+                ...extras.filter(shown).map(name => h('span', { class: 'chip' }, `${spaced(name)}: `, plain(raw[name]))),
             ];
             return items.length > 0 && h('div', { class: 'chips' }, items);
         }
@@ -548,14 +706,15 @@
             const src = imagePath(raw.ImageUrl);
             const seeded = seeds.filter(name => !blank(raw[name]));
 
+            // On the picture, kept small: the overall place top left and the overall score top
+            // right. The standing within its type sits beside the name.
             const shot = h(src ? 'a' : 'div', { class: 'shot', href: src, title: src && 'View full size' },
                 src ? picture(src, raw.Name || '') : h('span', { class: 'none' }, 'No image yet'),
                 row.rank != null && h('span', {
-                    class: row.rank <= 3 ? `rank p${row.rank}` : 'rank',
-                    title: 'Place on the board',
+                    class: row.rank <= 3 ? `badge place p${row.rank}` : 'badge place',
+                    title: `#${row.rank} of ${rows.length} on the board`,
                 }, `#${row.rank}`),
-                row.total != null && h('span', { class: 'total', title: scoreTitle(row.total) },
-                    h('small', {}, 'Total'), score(row.total)));
+                row.total != null && h('span', { class: 'badge score', title: scoreTitle(row.total) }, score(row.total)));
             if (src) viewable(shot, raw.Name, caption(row));
 
             return h('article', { class: 'card' },
@@ -563,11 +722,13 @@
 
                 h('div', { class: 'card-body' },
                     h('h2', {}, raw.Name || 'Unnamed'),
-                    chips(raw),
-                    stats.length > 0 && h('div', { class: 'stats' }, stats.map(name => meter(name, number(raw[name])))),
+                    chips(row),
+                    stats.length > 0 && h('div', { class: 'stats' }, stats.map(name => meter(row, name))),
                     (present('Address') || present('Galaxy')) && address(raw, true),
-                    seeded.length > 0 && h('div', { class: 'seeds' },
-                        seeded.map(name => h('span', { class: 'seed' }, h('b', {}, spaced(name)), ' ', raw[name])))),
+                    (seeded.length > 0 || row.typeRank != null) && h('div', { class: 'seed-line' },
+                        seeded.length > 0 && h('div', { class: 'seeds' },
+                            seeded.map(name => h('span', { class: 'seed' }, h('b', {}, spaced(name)), ' ', raw[name]))),
+                        standing(row))),
 
                 h('div', { class: 'foot' },
                     !blank(raw.Discoverer) && h('span', {}, 'Found by ', h('span', { class: 'who' }, raw.Discoverer)),

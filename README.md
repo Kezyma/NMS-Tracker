@@ -19,10 +19,23 @@ these ones have a job:
 | `Source` | A link to where it was posted. |
 | `Discoverer` | Who found it. |
 
-`data/maximums.json` holds the most each stat can be, per board, and the meters on the cards are
-drawn against it. Its names must match the fields in the data exactly - `Scan`, not `Scanning`.
-`Total` is the most the sum can be, and the total is shown as a percentage of it. It is set on its
-own because it is not the sum of the stat maximums.
+`data/ranges.json` holds what the stats can be, per board. Its names must match the fields in the
+data exactly - `Scan`, not `Scanning`.
+
+- The board's own figures are the most each stat can be across every type. `Total` is the most
+  the sum can be - set on its own because it is not the sum of the stat maximums. Each bar on a
+  card runs from 0 to its stat's figure, so bars compare across types.
+- `Types` gives each type's S-class `[floor, limit]` per stat, keyed by the `Type` field. With it:
+  - The overall score runs from the lowest total any type can roll (0%) to `Total` (100%).
+    Without types it runs from 0.
+  - An entry is also ranked among its own type and given a type score, which runs from the worst
+    S-class roll of that type (0%) to a perfect one (100%).
+  - Each bar carries two ticks marking the floor and the limit of the entry's type.
+
+The starship ranges come from the game's own `METADATA/REALITY/TABLES/INVENTORYTABLE.MBIN`
+(`ShipBaseStatsData`, class S), where Exotic is `Royal`, Explorer `Scientific`, Hauler `Dropship`,
+Living Ship `Alien`, Solar `Sail` and Sentinel `Robot`. They agree with the
+[wiki](https://nomanssky.miraheze.org/wiki/Starship).
 
 Which fields are stats, which get a pick-list, and which are seeds is set in each page's own
 config, at the bottom of its HTML file. Any field not named there still appears, as a column in

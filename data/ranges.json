@@ -1,0 +1,31 @@
+{
+    "starships": {
+        "Total": 310,
+        "Damage": 90,
+        "Shield": 125,
+        "Hyperdrive": 120,
+        "Manoeuvrability": 50,
+        "Types": {
+            "Exotic":      { "Damage": [50, 75], "Shield": [70, 90],  "Hyperdrive": [75, 95],  "Manoeuvrability": [40, 50] },
+            "Fighter":     { "Damage": [70, 90], "Shield": [24, 38],  "Hyperdrive": [0, 0],    "Manoeuvrability": [35, 45] },
+            "Explorer":    { "Damage": [0, 0],   "Shield": [30, 40],  "Hyperdrive": [90, 120], "Manoeuvrability": [25, 32] },
+            "Hauler":      { "Damage": [15, 30], "Shield": [95, 125], "Hyperdrive": [45, 58],  "Manoeuvrability": [10, 15] },
+            "Shuttle":     { "Damage": [25, 30], "Shield": [25, 30],  "Hyperdrive": [25, 30],  "Manoeuvrability": [15, 35] },
+            "Living Ship": { "Damage": [50, 75], "Shield": [15, 38],  "Hyperdrive": [75, 95],  "Manoeuvrability": [10, 15] },
+            "Solar":       { "Damage": [60, 75], "Shield": [23, 50],  "Hyperdrive": [38, 50],  "Manoeuvrability": [35, 40] },
+            "Sentinel":    { "Damage": [60, 80], "Shield": [20, 35],  "Hyperdrive": [5, 10],   "Manoeuvrability": [40, 50] },
+            "Corvette":    { "Damage": [15, 30], "Shield": [95, 125], "Hyperdrive": [45, 58],  "Manoeuvrability": [10, 15] }
+        }
+    },
+    "freighters": {
+        "Total": 140,
+        "Hyperdrive": 80,
+        "FleetCoordination": 60
+    },
+    "multi-tools": {
+        "Total": 155,
+        "Damage": 50,
+        "Mining": 50,
+        "Scan": 100
+    }
+}

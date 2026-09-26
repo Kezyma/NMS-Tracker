@@ -82,5 +82,19 @@
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1pt7rm0/explorer_ship_with_square_layout_sc/",
         "Discoverer": "Jarl6969",
         "ImageUrl": "S_0xB7A03C267BC3B13C.jpg"
+    },
+    {
+        "Name": "Kahayam's Dream UL9",
+        "Type": "Exotic",
+        "Seed": "0x54CE979B1E3E43A4",
+        "Damage": 57.619998931884769,
+        "Shield": 88.83419036865235,
+        "Hyperdrive": 93.68903350830078,
+        "Manoeuvrability": 44.84730911254883,
+        "Galaxy": 1,
+        "Address": "108FA291EED6",
+        "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1fubo7i/yellowgold_square_4sc_s_class_clam_tail_and_side/",
+        "Discoverer": "SufficientEmu6650",
+        "ImageUrl": "S_0x54CE979B1E3E43A4.jpg"
     }
 ]

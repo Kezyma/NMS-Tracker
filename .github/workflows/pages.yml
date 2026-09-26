@@ -26,15 +26,15 @@ jobs:
 
       # A hand-edited file with a trailing comma deploys happily and then shows an error on the
       # page. The live site is case-sensitive where Windows is not, so an image named Ship.PNG
-      # in the data and saved as ship.png works locally and breaks once deployed. And a stat
-      # misspelt in maximums.json quietly stops its meter using the maximum. (Total is the one
-      # name there that is not a stat: it is the most the sum can be.)
-      - name: Every data file parses, every image exists, every maximum names a real stat
+      # in the data and saved as ship.png works locally and breaks once deployed. A stat
+      # misspelt in ranges.json quietly stops its meter using the range. And the board-wide
+      # figures there must agree with the per-type ranges beneath them.
+      - name: Every data file parses, every image exists, every range is sound
         shell: python
         run: |
           import json, pathlib, sys
 
-          LOOKUPS = {'galaxies.json', 'maximums.json'}
+          LOOKUPS = {'galaxies.json', 'ranges.json'}
           failed = False
           boards = {}
           for path in sorted(pathlib.Path('data').glob('*.json')):
@@ -52,7 +52,7 @@ jobs:
                   failed = True
                   continue
 
-              boards[path.stem] = {key for entry in data if isinstance(entry, dict) for key in entry}
+              boards[path.stem] = [entry for entry in data if isinstance(entry, dict)]
               for entry in data:
                   image = str((entry.get('ImageUrl') if isinstance(entry, dict) else '') or '').strip()
                   if not image or image.startswith(('http://', 'https://')):
@@ -64,23 +64,66 @@ jobs:
                             f"(names are case-sensitive on the live site)")
                       failed = True
 
+          def error(message):
+              global failed
+              print(f'::error file=data/ranges.json::{message}')
+              failed = True
+
+          def is_span(value):
+              return (isinstance(value, list) and len(value) == 2
+                      and all(isinstance(v, (int, float)) for v in value) and value[0] <= value[1])
+
           try:
-              maximums = json.loads(pathlib.Path('data/maximums.json').read_text(encoding='utf-8'))
+              ranges = json.loads(pathlib.Path('data/ranges.json').read_text(encoding='utf-8'))
           except (OSError, ValueError):
-              maximums = {}
-          for board, stats in maximums.items():
-              fields = boards.get(board)
-              if fields is None and pathlib.Path(f'data/{board}.json').exists():
-                  continue  # there, but broken, and already reported above
-              if fields is None:
-                  print(f'::error file=data/maximums.json::"{board}" has no data/{board}.json')
-                  failed = True
-                  continue
-              for stat in stats:
-                  # Total is the most the sum can be, not a field in the data.
-                  if fields and stat != 'Total' and stat not in fields:
-                      print(f'::error file=data/maximums.json::{board}: no entry has a field named "{stat}"')
-                      failed = True
+              ranges = {}
+
+          for board, limits in ranges.items():
+              entries = boards.get(board)
+              if entries is None:
+                  if not pathlib.Path(f'data/{board}.json').exists():
+                      error(f'"{board}" has no data/{board}.json')
+                  continue  # otherwise it is there but broken, and already reported above
+
+              # Total is the most the sum can be and Types holds the ranges: neither is a field.
+              fields = {key for entry in entries for key in entry}
+              types = limits.get('Types', {})
+              stats = [key for key in limits if key not in ('Total', 'Types')]
+              for stat in stats + sorted({s for spans in types.values() for s in spans} - set(stats)):
+                  if fields and stat not in fields:
+                      error(f'{board}: no entry has a field named "{stat}"')
+
+              # Every range is [floor, limit], and the board's own figures are what they imply.
+              sound = True
+              for kind, spans in types.items():
+                  for stat, span in spans.items():
+                      if not is_span(span):
+                          error(f'{board}: {kind} {stat} should be [floor, limit], not {span}')
+                          sound = False
+              if types and sound:
+                  for stat in stats:
+                      top = max((spans[stat][1] for spans in types.values() if stat in spans), default=None)
+                      if top is not None and limits[stat] != top:
+                          error(f'{board}: {stat} is {limits[stat]}, but the most any type reaches is {top}')
+                  whole = [spans for spans in types.values() if all(s in spans for s in stats)]
+                  if 'Total' in limits and whole:
+                      top = max(sum(spans[s][1] for s in stats) for spans in whole)
+                      if limits['Total'] != top:
+                          error(f'{board}: Total is {limits["Total"]}, but the best any type can total is {top}')
+
+              # An entry the ranges cannot place, or one that rolled outside them, is worth a look
+              # but does not stop the deploy: the page marks it in red and carries on.
+              if types and sound:
+                  for entry in entries:
+                      name, kind = entry.get('Name'), entry.get('Type')
+                      if kind not in types:
+                          print(f'::warning file=data/{board}.json::{name}: no range for type "{kind}" in ranges.json')
+                          continue
+                      for stat, (low, high) in types[kind].items():
+                          value = entry.get(stat)
+                          if isinstance(value, (int, float)) and not low <= value <= high:
+                              print(f'::warning file=data/{board}.json::{name}: {stat} {value} is outside '
+                                    f'the S-class {kind} range of {low} to {high}')
 
           sys.exit(1 if failed else 0)
 

@@ -31,6 +31,11 @@
 
     --accent: #45b6fe;
     --on-accent: #0a0e14;
+
+    /* The floor and limit of a type's stat, marked across its bar. */
+    --tick: rgba(230, 236, 245, 0.7);
+    /* The part of a bar every roll of that type reaches anyway: the accent, faded. */
+    --fill-floor: rgba(69, 182, 254, 0.3);
     --accent-dim: #2b6d99;
     --good: #59d499;
     --bad: #e2564f;
@@ -236,9 +241,13 @@ h1 {
 /*
     The reason anyone is here: the glyphs you retype into a portal. Given real size, with the
     hex beneath it for copying, because reading glyphs off a screen is error-prone and the
-    two together let you check yourself.
+    two together let you check yourself. On a card the hex shares its line with the galaxy,
+    pushed to the right.
 */
 .addr { display: flex; flex-direction: column; gap: var(--space-2xs); }
+
+.addr-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--space-md); }
+.card .addr-line .hex { margin-left: auto; }
 
 .glyphs {
     font-family: var(--font-glyph);
@@ -302,51 +311,61 @@ a.shot[href], td.shot-cell a[href] { cursor: zoom-in; }
     text-transform: uppercase;
 }
 
-/* Rank and total ride on the image, which is where the eye lands first. */
-.rank {
+/*
+    On the picture, kept small: the overall place top left and the overall score top right. Each
+    is a single pill, dark enough to read over any screenshot.
+*/
+/* Large, but tucked close into the corners, so they fill the corner rather than the picture. */
+.shot .badge {
     position: absolute;
-    top: var(--space-sm);
-    left: var(--space-sm);
-    min-width: 2rem;
-    padding: var(--space-2xs) var(--space-sm);
-    background: rgba(10, 14, 20, 0.85);
+    padding: 0 var(--space-xs);
+    background: rgba(10, 14, 20, 0.82);
     border: 1px solid var(--border-strong);
-    border-radius: var(--radius-pill);
-    font-size: var(--text-sm);
+    border-radius: var(--radius-lg);
+    color: var(--text); /* not the link colour of the picture they sit on */
+    font-size: var(--text-md);
     font-weight: 700;
-    text-align: center;
+    line-height: 1.3;
+    white-space: nowrap;
 }
 
-.rank.p1 { background: var(--gold); color: #14223b; border-color: var(--gold); }
-.rank.p2 { background: var(--silver); color: #14223b; border-color: var(--silver); }
-.rank.p3 { background: var(--bronze); color: #14223b; border-color: var(--bronze); }
-
-.total {
-    position: absolute;
-    right: var(--space-sm);
-    bottom: var(--space-sm);
-    padding: var(--space-2xs) var(--space-sm);
-    background: rgba(10, 14, 20, 0.85);
-    border: 1px solid var(--gold-dim);
-    border-radius: var(--radius-sm);
-    color: var(--gold);
-    font-size: var(--text-lg);
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-
-.total small {
-    display: block;
-    color: var(--text-faint);
-    font-size: 0.6rem;
-    font-weight: 400;
-    letter-spacing: var(--tracked);
-    text-transform: uppercase;
-}
+.shot .place { top: var(--space-xs); left: var(--space-xs); }
+.shot .score { top: var(--space-xs); right: var(--space-xs); color: var(--gold); border-color: var(--gold-dim); font-variant-numeric: tabular-nums; }
 
 .card-body { display: flex; flex-direction: column; gap: var(--space-md); padding: var(--space-md); }
 
 .card h2 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+
+/* The place, type and score within its type - "#4", "Explorer", "92.9%" - right of the seeds. */
+.standing {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-xs);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.standing .place {
+    padding: 0 var(--space-sm);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    color: var(--text);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    line-height: 1.6;
+}
+
+.standing b { margin-left: var(--space-2xs); font-size: var(--text-sm); font-weight: 600; }
+
+/*
+    The podium, for the overall place on the picture and the place within a type alike. After
+    both of those rules, so these colours win over their plain backgrounds.
+*/
+.place.p1 { background: var(--gold); color: #14223b; border-color: var(--gold); }
+.place.p2 { background: var(--silver); color: #14223b; border-color: var(--silver); }
+.place.p3 { background: var(--bronze); color: #14223b; border-color: var(--bronze); }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
 
@@ -361,14 +380,65 @@ a.shot[href], td.shot-cell a[href] { cursor: zoom-in; }
     white-space: nowrap;
 }
 
-/* Each stat against the most it can be (data/maximums.json), so a card reads at a glance. */
+/*
+    A type chip, tinted in its type's colour. The types below have colours chosen to stay clear
+    of gold, silver and bronze, so a type never reads as a place; any other type gets one made
+    from its name (--type-auto). Sentinel is shared by starships and multi-tools, so it matches.
+*/
+.chip.type {
+    --type: var(--type-auto, var(--text-dim));
+    background: color-mix(in srgb, var(--type) 14%, transparent);
+    border-color: color-mix(in srgb, var(--type) 55%, transparent);
+    color: var(--type);
+    font-weight: 600;
+}
+
+.chip.type[data-type="Exotic" i]      { --type: #c084fc; }   /* violet */
+.chip.type[data-type="Sentinel" i]    { --type: #f472b6; }   /* pink */
+.chip.type[data-type="Fighter" i]     { --type: #f87171; }   /* red */
+.chip.type[data-type="Solar" i]       { --type: #fb923c; }   /* orange */
+.chip.type[data-type="Hauler" i]      { --type: #a3e635; }   /* lime */
+.chip.type[data-type="Living Ship" i] { --type: #4ade80; }   /* green */
+.chip.type[data-type="Explorer" i]    { --type: #2dd4bf; }   /* teal */
+.chip.type[data-type="Corvette" i]    { --type: #38bdf8; }   /* sky */
+.chip.type[data-type="Shuttle" i]     { --type: #818cf8; }   /* indigo */
+
+/* Each stat on one line: its name, its bar, its value. */
 .stats { display: flex; flex-direction: column; gap: var(--space-xs); }
 .stat { display: grid; grid-template-columns: 7.5rem 1fr 3.2rem; align-items: center; gap: var(--space-sm); }
 .stat .k { color: var(--text-dim); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em; }
 .stat .v { font-family: var(--font-mono); font-size: var(--text-xs); text-align: right; }
 
-.meter { height: 4px; background: var(--bg-raised); border-radius: var(--radius-pill); overflow: hidden; }
-.meter i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+/*
+    Every bar runs from nothing to the most any type can roll (data/ranges.json), so bars can be
+    compared across types. The thin line is the track and the fill; the two taller ticks across
+    it mark the floor and the limit of this entry's own type, so a roll reads against what was
+    possible for it. A type fixed at one value - an Explorer's damage, always 0 - shows one tick.
+*/
+.meter { position: relative; height: 12px; }
+
+.meter::before, .meter i {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    height: 4px;
+    border-radius: var(--radius-pill);
+}
+
+.meter::before { content: ''; right: 0; background: var(--bg-raised); }
+/* Paler up to the type's floor (--floor, set per bar along the fill), full colour past it. */
+.meter i { background: linear-gradient(to right, var(--fill-floor) var(--floor, 0%), var(--accent) var(--floor, 0%)); }
+
+/* Centred on its value, and drawn over the fill so it shows whichever side the fill ends. */
+.meter .tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--tick);
+    border-radius: 1px;
+}
 
 .card .foot {
     display: flex;
@@ -383,6 +453,13 @@ a.shot[href], td.shot-cell a[href] { cursor: zoom-in; }
 
 .card .foot .who { color: var(--text-dim); }
 .card .foot a { margin-left: auto; }
+
+/*
+    The seeds on the left and the standing within its type on the right. When the two cannot share
+    a line, the standing drops beneath, still on the right.
+*/
+.seed-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-xs) var(--space-md); }
+.seed-line .standing { margin-left: auto; }
 
 .seeds { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .seed { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-dim); }
@@ -475,6 +552,9 @@ tr.p3 td.pos { color: var(--bronze); font-weight: 700; }
 
 /* The best value of a stat across the board, when there is more than one entry to beat. */
 .best { color: var(--gold); font-weight: 700; }
+
+/* A value the type cannot roll at S-class: a typo, or not S-class. Wins over .best. */
+.out, .best.out { color: var(--bad); font-weight: 700; }
 
 /* ------------------------------------------------------------------ lightbox */
 
@@ -597,5 +677,4 @@ body:has(.lightbox[open]) { overflow: hidden; }
     .cards { grid-template-columns: 1fr; }
     .views { margin-left: 0; width: 100%; }
     .views button { flex: 1; }
-    .stat { grid-template-columns: 6rem 1fr 3rem; }
 }
