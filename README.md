@@ -15,7 +15,7 @@ these ones have a job:
 | the stats | Numbers. Summed into the total, which is the ranking. |
 | `Galaxy` | The galaxy's number, 1 for Euclid. The name comes from `data/galaxies.json`. |
 | `Address` | The 12-digit portal address in hex. Drawn as glyphs, with the hex beneath. |
-| `ImageUrl` | A file name in `img/`. Case matters on the live site. |
+| `ImageUrl` | A file name in `img/`, full size. Case matters on the live site. |
 | `Source` | A link to where it was posted. |
 | `Discoverer` | Who found it. |
 
@@ -31,11 +31,22 @@ data exactly - `Scan`, not `Scanning`.
   - An entry is also ranked among its own type and given a type score, which runs from the worst
     S-class roll of that type (0%) to a perfect one (100%).
   - Each bar carries two ticks marking the floor and the limit of the entry's type.
+  - A type listed as `*` holds ranges every type shares, for any type without its own - which is
+    how freighters are done, since every freighter rolls alike. Such an entry is still ranked
+    among its type, but has no type score: it would only repeat the overall one.
 
-The starship ranges come from the game's own `METADATA/REALITY/TABLES/INVENTORYTABLE.MBIN`
-(`ShipBaseStatsData`, class S), where Exotic is `Royal`, Explorer `Scientific`, Hauler `Dropship`,
-Living Ship `Alien`, Solar `Sail` and Sentinel `Robot`. They agree with the
-[wiki](https://nomanssky.miraheze.org/wiki/Starship).
+The ranges come from the game's own `METADATA/REALITY/TABLES/INVENTORYTABLE.MBIN`, class S:
+
+- Starships from `ShipBaseStatsData`, where Exotic is `Royal`, Explorer `Scientific`, Hauler
+  `Dropship`, Living Ship `Alien`, Solar `Sail` and Sentinel `Robot`. They agree with the
+  [wiki](https://nomanssky.miraheze.org/wiki/Starship).
+- Freighters from its `Freighter` entry, which agrees with the
+  [wiki](https://nomanssky.miraheze.org/wiki/Freighter).
+- Multi-tools from `WeaponBaseStatsData`, where Experimental is `Pristine`, Sentinel `Robot` and
+  Atlantid `Atlas`. The [wiki](https://nomanssky.miraheze.org/wiki/Multi-Tool) agrees except for
+  the Sentinel (Damage 25-50 and Scan 40-50 there, against 32-50 and 45-55 in the game) and the
+  Pistol's Scan (40-50 there, 45-50 in the game); the game's figures are used. The Staff's scan
+  is filed under `ROBOT_SHIP` in the game table, with the 40-50 the wiki gives it.
 
 Which fields are stats, which get a pick-list, and which are seeds is set in each page's own
 config, at the bottom of its HTML file. Any field not named there still appears, as a column in
@@ -49,6 +60,19 @@ python -m http.server
 
 Then open http://localhost:8000. Opening the files directly will not work: browsers do not let a
 page read files off the disk.
+
+## Pictures
+
+Only the originals go in `img/`. The cards and the list show small copies of them - 960 pixels
+wide, WebP, around a twentieth of the size - and only the viewer opens the original. The copies
+live in `img/thumbs/`, which git ignores: the deploy makes them with `tools/thumbnails.py`. The
+page uses the original wherever a copy is missing, so locally it works either way; to preview
+with the copies:
+
+```bash
+pip install Pillow
+python tools/thumbnails.py
+```
 
 ## Deploying
 

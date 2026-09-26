@@ -11,7 +11,7 @@
         "Address": "40AFECFA6A5B",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1hqawrw/happy_new_yearcrashed_exotic_light_red_crimson/",
         "Discoverer": "Servalin",
-        "ImageUrl": "S_0x18BF9408F8FB6EB6.jpg"
+        "ImageUrl": "Hokuts's Triumph.jpg"
     },
     {
         "Name": "GS3 Tebash",
@@ -25,7 +25,7 @@
         "Address": "101011111100",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1fwzkoh/exotic_with_4_sc_slots_square_config_love_the/",
         "Discoverer": "Amazing-Ad9065",
-        "ImageUrl": "S_0xE19392FB05F085E9.jpg"
+        "ImageUrl": "GS3 Tebash.jpg"
     },
     {
         "Name": "Hihar's Reckless Star-Sailor",
@@ -39,7 +39,7 @@
         "Address": "122CFCEE2E82",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1ivmfm4/white_exotic_ship_4_square_supercharged_slots/",
         "Discoverer": "Runner9905",
-        "ImageUrl": "S_0xBE32393D9C0A1712.jpg"
+        "ImageUrl": "Hihar's Reckless Star-Sailor.jpg"
     },
     {
         "Name": "Final Focus WR5",
@@ -53,7 +53,7 @@
         "Address": "11B00DB1DF83",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1kzr7ba/explorer_ship_with_square_layout_supercharged_2x2/",
         "Discoverer": "Jarl6969",
-        "ImageUrl": "S_0xA4F1253596FB39AF.jpg"
+        "ImageUrl": "Final Focus WR5.jpg"
     },
     {
         "Name": "PE9 Bungo",
@@ -67,7 +67,7 @@
         "Address": "1120FDA14C9C",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1kknce7/4_square_supercharged_shuttle_wsymmetrical_hover/",
         "Discoverer": "Frosty-Abies-3317",
-        "ImageUrl": "S_0xCFE998FC801E1E45.jpg"
+        "ImageUrl": "PE9 Bungo.jpg"
     },
     {
         "Name": "AN8 Riyamats",
@@ -81,7 +81,7 @@
         "Address": "115DF6FE5FF8",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1pt7rm0/explorer_ship_with_square_layout_sc/",
         "Discoverer": "Jarl6969",
-        "ImageUrl": "S_0xB7A03C267BC3B13C.jpg"
+        "ImageUrl": "AN8 Riyamats.jpg"
     },
     {
         "Name": "Kahayam's Dream UL9",
@@ -95,6 +95,48 @@
         "Address": "108FA291EED6",
         "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1fubo7i/yellowgold_square_4sc_s_class_clam_tail_and_side/",
         "Discoverer": "SufficientEmu6650",
-        "ImageUrl": "S_0x54CE979B1E3E43A4.jpg"
+        "ImageUrl": "Kahayam's Dream UL9.jpg"
+    },
+    {
+        "Name": "OD3 Mabokuts",
+        "Type": "Explorer",
+        "Seed": "0x60012A5FC09FE091",
+        "Damage": 0.0,
+        "Shield": 37.33344650268555,
+        "Hyperdrive": 113.56300354003906,
+        "Manoeuvrability": 29.138242721557618,
+        "Galaxy": 1,
+        "Address": "119E968816E0",
+        "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1f50p2q/explorer_with_square_sc_layout_in_s_class/",
+        "Discoverer": "Jarl6969",
+        "ImageUrl": "OD3 Mabokuts.jpg"
+    },
+    {
+        "Name": "The Falcon of Souls",
+        "Type": "Explorer",
+        "Seed": "0x85D522FBADBABB5A",
+        "Damage": 0.0,
+        "Shield": 34.995384216308597,
+        "Hyperdrive": 96.1524429321289,
+        "Manoeuvrability": 25.457836151123048,
+        "Galaxy": 1,
+        "Address": "11440AE22957",
+        "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1u3nm6r/red_white_explorer_4_square_sc_slots/",
+        "Discoverer": "Vacous_Scholar",
+        "ImageUrl": "The Falcon of Souls.jpg"
+    },
+    {
+        "Name": "Falcon of the Tomerig",
+        "Type": "Fighter",
+        "Seed": "0x297407276FBE5A56",
+        "Damage": 73.47885131835938,
+        "Shield": 34.669578552246097,
+        "Hyperdrive": 0.0,
+        "Manoeuvrability": 39.33004379272461,
+        "Galaxy": 1,
+        "Address": "4419019560CA",
+        "Source": "https://www.reddit.com/r/NMSCoordinateExchange/comments/1qmujj9/4_square_crashed_fighter/",
+        "Discoverer": "Street-Fee-8458",
+        "ImageUrl": "Falcon of the Tomerig.jpg"
     }
 ]

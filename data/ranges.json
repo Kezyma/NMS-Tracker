@@ -20,12 +20,25 @@
     "freighters": {
         "Total": 140,
         "Hyperdrive": 80,
-        "FleetCoordination": 60
+        "FleetCoordination": 60,
+        "Types": {
+            "*": { "Hyperdrive": [60, 80], "FleetCoordination": [40, 60] }
+        }
     },
     "multi-tools": {
         "Total": 155,
         "Damage": 50,
         "Mining": 50,
-        "Scan": 100
+        "Scan": 100,
+        "Types": {
+            "Experimental": { "Damage": [15, 25], "Mining": [25, 30], "Scan": [100, 100] },
+            "Royal":        { "Damage": [15, 25], "Mining": [25, 30], "Scan": [100, 100] },
+            "Sentinel":     { "Damage": [32, 50], "Mining": [10, 15], "Scan": [45, 55] },
+            "Atlantid":     { "Damage": [10, 20], "Mining": [35, 50], "Scan": [40, 50] },
+            "Alien":        { "Damage": [25, 35], "Mining": [15, 20], "Scan": [50, 60] },
+            "Staff":        { "Damage": [25, 50], "Mining": [10, 15], "Scan": [40, 50] },
+            "Pistol":       { "Damage": [0, 0],   "Mining": [20, 35], "Scan": [45, 50] },
+            "Rifle":        { "Damage": [15, 20], "Mining": [0, 0],   "Scan": [15, 20] }
+        }
     }
 }

@@ -61,16 +61,22 @@
         return response.json();
     }
 
-    /** An ImageUrl as a path into img/, or a full URL left alone. */
-    function imagePath(value) {
+    /**
+     * An ImageUrl as the two pictures the page uses: the original in img/, which the viewer
+     * shows, and the small copy of it in img/thumbs/, which the cards and the list show. The
+     * copies are made by tools/thumbnails.py on every deploy. A full URL is used as it is, for
+     * both.
+     */
+    function images(value) {
         const text = String(value ?? '').trim();
         if (!text) return null;
-        if (/^https?:\/\//i.test(text)) return text;
+        if (/^https?:\/\//i.test(text)) return { full: text, thumb: text };
 
         // Tolerate "img/x.png", "/x.png" and backslashes. A leading slash would otherwise
         // escape the project path on GitHub Pages and quietly 404.
         const file = text.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^img\//i, '');
-        return 'img/' + file.split('/').map(encodeURIComponent).join('/');
+        const path = file.split('/').map(encodeURIComponent).join('/');
+        return { full: `img/${path}`, thumb: `img/thumbs/${path}.webp` };
     }
 
     /**
@@ -88,20 +94,34 @@
         }, type);
     }
 
-    /** An image that becomes a placeholder, rather than a broken icon, if the file is missing. */
-    function picture(src, alt) {
-        const img = h('img', { src, alt, loading: 'lazy', decoding: 'async' });
+    // Originals that could not be loaded, so the viewer leaves them out.
+    const missing = new Set();
+
+    /**
+     * A picture shown by its small copy. With no copy - locally, before tools/thumbnails.py has
+     * run - it falls back to the original; with neither, it becomes a placeholder rather than a
+     * broken icon.
+     */
+    function picture({ full, thumb }, alt) {
+        const img = h('img', { src: thumb, alt, loading: 'lazy', decoding: 'async' });
         img.addEventListener('error', () => {
+            if (img.getAttribute('src') !== full) {
+                img.src = full;
+                return;
+            }
+            missing.add(full);
             img.closest('a')?.removeAttribute('href');
             img.replaceWith(h('span', { class: 'none' }, 'Image missing'));
-        }, { once: true });
+        });
         return img;
     }
 
     let lightbox;
 
     /**
-     * The one full-page viewer every image on the page shares, made on first use. Built on
+     * The one full-page viewer the page shares, made on first use: a carousel through the
+     * pictures the board is showing, in the order it shows them. The arrow keys, the buttons at
+     * either side and a swipe all step between them, wrapping round at the ends. Built on
      * <dialog>, which brings the backdrop and Escape to close, and keeps focus inside while it
      * is open.
      */
@@ -111,40 +131,123 @@
         const img = h('img', { alt: '' });
         const title = h('span', { class: 'title' });
         const detail = h('span', { class: 'detail' });
+        const count = h('span', { class: 'count' });
         const close = h('button', { type: 'button', class: 'close', 'aria-label': 'Close' }, '×');
+        const back = h('button', { type: 'button', class: 'step back', 'aria-label': 'Previous picture' }, '‹');
+        const next = h('button', { type: 'button', class: 'step next', 'aria-label': 'Next picture' }, '›');
         const dialog = h('dialog', { class: 'lightbox' },
-            close,
-            h('figure', {}, img, h('figcaption', {}, title, detail)));
+            close, back, next,
+            h('figure', {}, img, h('figcaption', {}, title, detail, count)));
 
-        // Anywhere but the picture itself closes it - the backdrop, the caption, the button.
-        dialog.addEventListener('click', event => {
-            if (event.target !== img) dialog.close();
+        let slides = [];
+        let index = 0;
+        let original = null; // the original being shown, or on its way
+
+        /**
+         * Shows slide `to`. It starts on the small copy - the card's own when it is already
+         * loaded, which gives the picture's shape at once - and the original replaces it when it
+         * arrives. The picture is sized by its shape rather than its pixels, so the swap takes
+         * exactly the same space.
+         */
+        function go(to, preview) {
+            index = (to + slides.length) % slides.length;
+            const slide = slides[index];
+            original = slide.full;
+
+            const ready = preview && preview.complete && preview.naturalWidth > 0;
+            if (ready) img.style.setProperty('--aspect', preview.naturalWidth / preview.naturalHeight);
+            const early = ready ? preview.getAttribute('src') : slide.thumb;
+            img.src = early;
+            if (early !== slide.full) {
+                const full = new Image();
+                full.addEventListener('load', () => {
+                    if (original === slide.full) img.src = slide.full;
+                });
+                full.src = slide.full;
+            }
+
+            img.alt = slide.name;
+            title.textContent = slide.name;
+            detail.replaceChildren(...[].concat(slide.note).flatMap((line, i) => (i > 0 ? [h('br'), line] : [line])));
+            count.textContent = slides.length > 1 ? `${index + 1} of ${slides.length}` : '';
+            dialog.setAttribute('aria-label', slide.name || 'Image');
+
+            // The neighbours' small copies, fetched now so the next step shows at once.
+            for (const step of slides.length > 1 ? [-1, 1] : []) {
+                new Image().src = slides[(index + step + slides.length) % slides.length].thumb;
+            }
+        }
+
+        // Whatever arrives, copy or original, carries the picture's shape.
+        img.addEventListener('load', () => {
+            if (img.naturalWidth > 0) img.style.setProperty('--aspect', img.naturalWidth / img.naturalHeight);
         });
-        // So the next picture never opens showing the last one while it loads.
-        dialog.addEventListener('close', () => img.removeAttribute('src'));
+        // A missing copy falls straight back to the original; a missing original, to nothing.
+        img.addEventListener('error', () => {
+            if (original && img.getAttribute('src') !== original) img.src = original;
+            else img.removeAttribute('src');
+        });
+
+        back.addEventListener('click', () => go(index - 1));
+        next.addEventListener('click', () => go(index + 1));
+        dialog.addEventListener('keydown', event => {
+            if (slides.length < 2) return;
+            if (event.key === 'ArrowLeft') go(index - 1);
+            else if (event.key === 'ArrowRight') go(index + 1);
+            else return;
+            event.preventDefault();
+        });
+
+        // A sideways swipe on a touch screen steps too. A swipe ends without a click, so it
+        // cannot close the viewer the way a tap on the backdrop does.
+        let touch = null;
+        dialog.addEventListener('touchstart', event => {
+            touch = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+        }, { passive: true });
+        dialog.addEventListener('touchend', event => {
+            if (!touch || slides.length < 2) return;
+            const dx = event.changedTouches[0].clientX - touch.x;
+            const dy = event.changedTouches[0].clientY - touch.y;
+            touch = null;
+            if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(index + (dx < 0 ? 1 : -1));
+        });
+
+        // Anywhere but the picture and the arrows closes it - the backdrop, the caption, the ×.
+        dialog.addEventListener('click', event => {
+            if (event.target !== img && !event.target.closest('.step')) dialog.close();
+        });
+        // So the next opening never shows the last picture while it loads.
+        dialog.addEventListener('close', () => {
+            original = null;
+            img.removeAttribute('src');
+        });
         document.body.append(dialog);
 
         lightbox = {
-            /** The note is one line of text, or a list of them. */
-            show(src, name, note) {
-                img.src = src;
-                img.alt = name;
-                title.textContent = name;
-                detail.replaceChildren(...[].concat(note).flatMap((line, i) => (i > 0 ? [h('br'), line] : [line])));
-                dialog.setAttribute('aria-label', name || 'Image');
+            /**
+             * Opens on slides[at], each slide { full, thumb, name, note }, where the note is a
+             * line of text or a list of them. The preview is the card's own picture, if loaded.
+             */
+            show(list, at, preview) {
+                slides = list;
+                dialog.classList.toggle('single', list.length < 2);
+                go(at, preview);
                 dialog.showModal();
             },
         };
         return lightbox;
     }
 
-    /** A link to a full image that opens in the viewer. A modified or middle click still opens a tab. */
-    function viewable(link, name, note) {
+    /**
+     * A link to an original that opens the viewer, handing it the small copy inside the link.
+     * A modified or middle click still opens a tab.
+     */
+    function viewable(link, open) {
         link.addEventListener('click', event => {
             if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
             // No href means the file failed to load and the picture became a placeholder.
-            if (link.hasAttribute('href')) viewer().show(link.getAttribute('href'), name || '', note || []);
+            if (link.hasAttribute('href')) open(link.querySelector('img'));
         });
         return link;
     }
@@ -233,12 +336,15 @@
                 ? stats.reduce((sum, name) => sum + (Number.isFinite(number(raw[name])) ? number(raw[name]) : 0), 0)
                 : null;
 
-            // A type's worst and best possible totals, when every stat of it has a range.
-            const range = typed && !blank(raw.Type) ? types[raw.Type] : null;
-            const bounds = range ? stats.map(name => pair(range[name])) : [];
-            const whole = bounds.length > 0 && bounds.every(Boolean);
-            const floor = whole ? bounds.reduce((sum, [low]) => sum + low, 0) : null;
-            const limit = whole ? bounds.reduce((sum, [, high]) => sum + high, 0) : null;
+            // The type's own S-class ranges, or failing that the ones every type shares, filed
+            // under "*" - freighters, whose types all roll alike. Then the worst and best totals
+            // those ranges allow, when every stat has one.
+            const own = typed && !blank(raw.Type) ? types[raw.Type] : undefined;
+            const range = own || (typed ? types['*'] : undefined) || null;
+            const ends = range ? stats.map(name => pair(range[name])) : [];
+            const whole = ends.length > 0 && ends.every(Boolean);
+            const floor = whole ? ends.reduce((sum, [low]) => sum + low, 0) : null;
+            const limit = whole ? ends.reduce((sum, [, high]) => sum + high, 0) : null;
 
             return {
                 raw,
@@ -250,8 +356,9 @@
                 floor,
                 limit,
                 // Where the total sits between the worst S-class roll of its type and the best:
-                // 0 is the floor, 1 a perfect roll.
-                typeScore: whole && limit > floor ? (total - floor) / (limit - floor) : null,
+                // 0 is the floor, 1 a perfect roll. Only for a type with ranges of its own - on
+                // ranges every type shares, it would just repeat the overall score.
+                typeScore: own && whole && limit > floor ? (total - floor) / (limit - floor) : null,
                 text: [...fields.map(name => raw[name]), galaxyName(raw.Galaxy)]
                     .filter(value => typeof value === 'string')
                     .join('\n')
@@ -325,8 +432,12 @@
 
             const range = bounds(row, name);
             if (!range) return head;
-            if (range[0] === range[1]) return `${head} Always ${figure(range[0])} on an S-class ${row.raw.Type}.`;
-            return `${head} An S-class ${row.raw.Type} rolls ${figure(range[0])} to ${figure(range[1])}`
+
+            // Named for the type when the range is its own; for a range every type shares, for
+            // the board - "an S-class freighter".
+            const who = row.range === types[row.raw.Type] ? row.raw.Type : one;
+            if (range[0] === range[1]) return `${head} Always ${figure(range[0])} on an S-class ${who}.`;
+            return `${head} An S-class ${who} rolls ${figure(range[0])} to ${figure(range[1])}`
                 + (outside(row, name, value) ? ' - and this is outside that, so a typo or not S-class.' : '.');
         }
 
@@ -372,11 +483,14 @@
             stats.length > 0 && { id: 'rank', label: '#', cls: 'pos', sortsAs: 'total', cell: row => row.rank },
             { id: 'image', label: 'Image', hideLabel: true, cls: 'shot-cell', cell: thumb },
             { id: 'Name', label: 'Name', cls: 'name', sort: field('Name'), cell: row => row.raw.Name },
-            ...tags.map(name => ({ id: name, label: spaced(name), sort: field(name), cell: row => plain(row.raw[name]) })),
-            typed && {
-                id: 'typeRank', label: 'Type #', numeric: true, cls: 'num',
-                sort: row => row.typeRank, cell: row => row.typeRank,
-            },
+            // The place within its type follows straight after the type itself.
+            ...tags.flatMap(name => [
+                { id: name, label: spaced(name), sort: field(name), cell: row => plain(row.raw[name]) },
+                name === 'Type' && typed && {
+                    id: 'typeRank', label: 'Type #', numeric: true, cls: 'num',
+                    sort: row => row.typeRank, cell: row => row.typeRank,
+                },
+            ]),
             ...stats.map(name => ({
                 id: name,
                 label: spaced(name),
@@ -394,7 +508,7 @@
                 id: 'total', label: 'Total', numeric: true, desc: true, cls: 'num tot',
                 sort: row => row.total, cell: row => score(row.total), title: row => scoreTitle(row.total),
             },
-            typed && {
+            rows.some(row => row.typeScore != null) && {
                 id: 'typeScore', label: 'Type score', numeric: true, desc: true, cls: 'num',
                 sort: row => row.typeScore,
                 cell: row => (row.typeScore == null ? '' : percent(row.typeScore)),
@@ -607,9 +721,27 @@
 
         /* -------------------------------------------------------------- drawing */
 
+        // What the board is showing, in the order it shows it: the viewer steps through this.
+        let visible = [];
+
+        /** Opens the viewer on a row's picture, able to step through every other one on show. */
+        function open(row, preview) {
+            const pictured = visible.filter(other => {
+                const pictures = images(other.raw.ImageUrl);
+                return pictures && !missing.has(pictures.full);
+            });
+            const slides = pictured.map(other => ({
+                ...images(other.raw.ImageUrl),
+                name: other.raw.Name || '',
+                note: caption(other),
+            }));
+            viewer().show(slides, Math.max(0, pictured.indexOf(row)), preview);
+        }
+
         function draw() {
             const list = rows.filter(matches).sort(compare);
             const column = byId[state.sort.key];
+            visible = list;
 
             tally.textContent = list.length === rows.length
                 ? `${rows.length} ${rows.length === 1 ? one : many}`
@@ -703,19 +835,19 @@
 
         function card(row) {
             const { raw } = row;
-            const src = imagePath(raw.ImageUrl);
+            const pictures = images(raw.ImageUrl);
             const seeded = seeds.filter(name => !blank(raw[name]));
 
             // On the picture, kept small: the overall place top left and the overall score top
             // right. The standing within its type sits beside the name.
-            const shot = h(src ? 'a' : 'div', { class: 'shot', href: src, title: src && 'View full size' },
-                src ? picture(src, raw.Name || '') : h('span', { class: 'none' }, 'No image yet'),
+            const shot = h(pictures ? 'a' : 'div', { class: 'shot', href: pictures?.full, title: pictures && 'View full size' },
+                pictures ? picture(pictures, raw.Name || '') : h('span', { class: 'none' }, 'No image yet'),
                 row.rank != null && h('span', {
                     class: row.rank <= 3 ? `badge place p${row.rank}` : 'badge place',
                     title: `#${row.rank} of ${rows.length} on the board`,
                 }, `#${row.rank}`),
                 row.total != null && h('span', { class: 'badge score', title: scoreTitle(row.total) }, score(row.total)));
-            if (src) viewable(shot, raw.Name, caption(row));
+            if (pictures) viewable(shot, preview => open(row, preview));
 
             return h('article', { class: 'card' },
                 shot,
@@ -736,10 +868,10 @@
         }
 
         function thumb(row) {
-            const src = imagePath(row.raw.ImageUrl);
-            if (!src) return h('span', { class: 'none', title: 'No image yet' });
-            return viewable(h('a', { href: src, title: 'View full size' }, picture(src, row.raw.Name || '')),
-                row.raw.Name, caption(row));
+            const pictures = images(row.raw.ImageUrl);
+            if (!pictures) return h('span', { class: 'none', title: 'No image yet' });
+            return viewable(h('a', { href: pictures.full, title: 'View full size' }, picture(pictures, row.raw.Name || '')),
+                preview => open(row, preview));
         }
 
         function table(list) {

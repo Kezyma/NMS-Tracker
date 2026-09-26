@@ -258,6 +258,9 @@ h1 {
     word-break: break-all;
 }
 
+/* On a card the glyphs sit centred above the galaxy and hex; in the list they stay left. */
+.card .glyphs { align-self: center; text-align: center; }
+
 .hex {
     font-family: var(--font-mono);
     font-size: var(--text-xs);
@@ -393,15 +396,30 @@ a.shot[href], td.shot-cell a[href] { cursor: zoom-in; }
     font-weight: 600;
 }
 
-.chip.type[data-type="Exotic" i]      { --type: #c084fc; }   /* violet */
-.chip.type[data-type="Sentinel" i]    { --type: #f472b6; }   /* pink */
-.chip.type[data-type="Fighter" i]     { --type: #f87171; }   /* red */
-.chip.type[data-type="Solar" i]       { --type: #fb923c; }   /* orange */
-.chip.type[data-type="Hauler" i]      { --type: #a3e635; }   /* lime */
-.chip.type[data-type="Living Ship" i] { --type: #4ade80; }   /* green */
-.chip.type[data-type="Explorer" i]    { --type: #2dd4bf; }   /* teal */
-.chip.type[data-type="Corvette" i]    { --type: #38bdf8; }   /* sky */
-.chip.type[data-type="Shuttle" i]     { --type: #818cf8; }   /* indigo */
+/* Starships */
+.chip.type[data-type="Exotic" i]       { --type: #c084fc; }   /* violet */
+.chip.type[data-type="Sentinel" i]     { --type: #f472b6; }   /* pink - multi-tools too */
+.chip.type[data-type="Fighter" i]      { --type: #f87171; }   /* red */
+.chip.type[data-type="Solar" i]        { --type: #fb923c; }   /* orange */
+.chip.type[data-type="Hauler" i]       { --type: #a3e635; }   /* lime */
+.chip.type[data-type="Living Ship" i]  { --type: #4ade80; }   /* green */
+.chip.type[data-type="Explorer" i]     { --type: #2dd4bf; }   /* teal */
+.chip.type[data-type="Corvette" i]     { --type: #38bdf8; }   /* sky */
+.chip.type[data-type="Shuttle" i]      { --type: #818cf8; }   /* indigo */
+
+/* Multi-tools, echoing their nearest starship: Royal is the game's own name for the Exotic. */
+.chip.type[data-type="Royal" i]        { --type: #c084fc; }   /* violet */
+.chip.type[data-type="Experimental" i] { --type: #2dd4bf; }   /* teal */
+.chip.type[data-type="Atlantid" i]     { --type: #38bdf8; }   /* sky */
+.chip.type[data-type="Alien" i]        { --type: #4ade80; }   /* green */
+.chip.type[data-type="Staff" i]        { --type: #fb923c; }   /* orange */
+.chip.type[data-type="Pistol" i]       { --type: #818cf8; }   /* indigo */
+.chip.type[data-type="Rifle" i]        { --type: #f87171; }   /* red */
+
+/* Freighters */
+.chip.type[data-type="Pirate" i]       { --type: #f87171; }   /* red */
+.chip.type[data-type="Capital" i]      { --type: #c084fc; }   /* violet */
+.chip.type[data-type="System" i]       { --type: #2dd4bf; }   /* teal */
 
 /* Each stat on one line: its name, its bar, its value. */
 .stats { display: flex; flex-direction: column; gap: var(--space-xs); }
@@ -593,10 +611,16 @@ body:has(.lightbox[open]) { overflow: hidden; }
     margin: 0;
 }
 
-/* As large as the window allows, whole, never cropped - and never blown up past its own size. */
+/*
+    As large as the window allows, whole and never cropped. Sized from the picture's shape
+    (--aspect, set as it opens) rather than its pixels, so the small copy it opens on and the
+    original that replaces it take exactly the same space. The max-height and object-fit only
+    matter if the shape is not known, when --aspect falls back to 16:9.
+*/
 .lightbox img {
     display: block;
-    max-width: 100%;
+    width: min(calc(100vw - 2 * var(--space-xl)), calc((100dvh - 8rem) * var(--aspect, 1.7778)));
+    height: auto;
     max-height: calc(100dvh - 8rem);
     object-fit: contain;
     border-radius: var(--radius);
@@ -616,6 +640,10 @@ body:has(.lightbox[open]) { overflow: hidden; }
 .lightbox .detail { color: var(--gold); font-size: var(--text-sm); font-weight: 700; }
 .lightbox .detail:empty { display: none; }
 
+/* Where this picture sits among the ones on show: "3 of 9". */
+.lightbox .count { color: var(--text-faint); font-size: var(--text-xs); letter-spacing: var(--tracked); }
+.lightbox .count:empty { display: none; }
+
 .lightbox .close {
     position: fixed;
     top: var(--space-md);
@@ -632,6 +660,31 @@ body:has(.lightbox[open]) { overflow: hidden; }
 }
 
 .lightbox .close:hover { background: var(--bg-hover); }
+
+/*
+    Either side of the picture, stepping to the one before and after. On a wide screen the
+    picture is limited by its height, which leaves them room at the sides; on a narrow one they
+    sit over its edges. Hidden when there is only one picture to show.
+*/
+.lightbox .step {
+    position: fixed;
+    top: 50%;
+    width: 2.75rem;
+    height: 4rem;
+    transform: translateY(-50%);
+    background: rgba(10, 14, 20, 0.7);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 2rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.lightbox .step:hover { background: var(--bg-hover); }
+.lightbox .back { left: var(--space-md); }
+.lightbox .next { right: var(--space-md); }
+.lightbox.single .step { display: none; }
 
 /* ------------------------------------------------------------------ states */
 

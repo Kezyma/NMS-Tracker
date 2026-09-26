@@ -7,3 +7,6 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# Made from img/ on every deploy by tools/thumbnails.py
+img/thumbs/
